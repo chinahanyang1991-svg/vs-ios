@@ -11,9 +11,21 @@ struct SubscriptionMeta: Identifiable, Codable, Hashable {
 
 enum ConfigStoreError: LocalizedError {
     case unknownSubscription
+    case unknownNode
+    case invalidNode(String)
+    case duplicateNode
 
     var errorDescription: String? {
-        "这条订阅记录已不在本地，未删除任何节点"
+        switch self {
+        case .unknownSubscription:
+            return "这条订阅记录已不在本地，未删除任何节点"
+        case .unknownNode:
+            return "找不到要编辑的节点，未改动任何数据"
+        case .invalidNode(let reason):
+            return "编辑未生效：\(reason)"
+        case .duplicateNode:
+            return "已经有完全相同的节点，未合并或丢弃任何一条"
+        }
     }
 }
 
@@ -108,7 +120,31 @@ final class ConfigStore {
         nodes = remaining
     }
 
+    /// 编辑单个节点。校验通过并且写盘成功才改内存；来源订阅不由编辑面板决定。
     func updateNode(id: String, to updated: Node) throws {
+        guard let index = nodes.firstIndex(where: { $0.id == id }) else {
+            throw ConfigStoreError.unknownNode
+        }
+        let name = updated.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let host = updated.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw ConfigStoreError.invalidNode("名称不能为空") }
+        guard !host.isEmpty else { throw ConfigStoreError.invalidNode("服务器地址不能为空") }
+        guard (1...65535).contains(updated.port) else {
+            throw ConfigStoreError.invalidNode("端口需在 1…65535 之间，当前填的是 \(updated.port)")
+        }
+
+        var candidate = updated
+        candidate.name = name
+        candidate.host = host
+        candidate.sourceURL = nodes[index].sourceURL
+        let clashes = nodes.indices.contains { $0 != index && nodes[$0].id == candidate.id }
+        guard !clashes else { throw ConfigStoreError.duplicateNode }
+
+        var edited = nodes
+        edited[index] = candidate
+        try write(nodes: edited, subscriptions: subscriptions)
+        nodes = edited
+        lastStatus = "已更新节点 \(candidate.name)"
     }
 
     /// 删除整条订阅记录，并带走它来源的节点；其他来源与手动粘贴的节点保留。

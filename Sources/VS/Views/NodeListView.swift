@@ -6,6 +6,7 @@ struct NodeListView: View {
     @State private var latencies: [String: ProbeOutcome] = [:]
     @State private var isProbing = false
     @State private var showImport = false
+    @State private var editingNode: Node?
     @State private var storeError: String?
 
     var body: some View {
@@ -62,6 +63,8 @@ struct NodeListView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions {
+                            Button("编辑") { editingNode = node }
+                                .tint(.blue)
                             Button("删除", role: .destructive) {
                                 do {
                                     try store.removeNode(node)
@@ -76,6 +79,11 @@ struct NodeListView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .refreshable { await probeAll() }
+            .sheet(item: $editingNode) { node in
+                NodeEditorView(node: node) { oldID in
+                    latencies.removeValue(forKey: oldID)
+                }
+            }
         }
     }
 
@@ -131,6 +139,97 @@ struct NodeRow: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(.white.opacity(0.12), in: Capsule())
+    }
+}
+
+struct NodeEditorView: View {
+    @Environment(ConfigStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let onUpdated: (String) -> Void
+
+    @State private var name: String
+    @State private var host: String
+    @State private var port: String
+    @State private var credential: String
+    @State private var errorText: String?
+
+    private let node: Node
+
+    init(node: Node, onUpdated: @escaping (String) -> Void) {
+        self.node = node
+        self.onUpdated = onUpdated
+        _name = State(initialValue: node.name)
+        _host = State(initialValue: node.host)
+        _port = State(initialValue: String(node.port))
+        _credential = State(initialValue: node.credential ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("可编辑") {
+                    TextField("名称", text: $name)
+                    TextField("服务器地址", text: $host)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("端口", text: $port)
+                        .keyboardType(.numbersAndPunctuation)
+                    TextField(node.kind == .shadowsocks ? "密码" : "UUID 或密码", text: $credential)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.footnote.monospaced())
+                }
+                Section("本轮不支持修改") {
+                    LabeledContent("协议", value: node.kind.displayName)
+                    if let method = node.method {
+                        LabeledContent("加密方式", value: method)
+                    }
+                    LabeledContent("传输方式", value: node.transport.uppercased())
+                    LabeledContent("TLS", value: node.security)
+                    if let serverName = node.serverName {
+                        LabeledContent("SNI", value: serverName)
+                    }
+                    if node.sourceURL != nil {
+                        Text("该节点来自订阅，下次刷新会以服务端版本覆盖这里保存的修改。")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                if let errorText {
+                    Text(errorText).font(.caption).foregroundStyle(.orange)
+                }
+            }
+            .navigationTitle("编辑节点")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { save() }
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let trimmedPort = port.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let parsedPort = Int(trimmedPort) else {
+            errorText = "编辑未生效：端口要填数字，当前是“\(trimmedPort)”"
+            return
+        }
+        var updated = node
+        updated.name = name
+        updated.host = host
+        updated.port = parsedPort
+        updated.credential = credential.isEmpty ? nil : credential
+        do {
+            try store.updateNode(id: node.id, to: updated)
+            onUpdated(node.id)
+            dismiss()
+        } catch {
+            errorText = (error as NSError).localizedDescription
+        }
     }
 }
 

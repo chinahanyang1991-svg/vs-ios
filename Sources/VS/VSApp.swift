@@ -9,6 +9,7 @@ struct VSApp: App {
             RootView()
                 .environment(store)
                 .tint(.cyan)
+                .preferredColorScheme(.dark)
         }
     }
 }

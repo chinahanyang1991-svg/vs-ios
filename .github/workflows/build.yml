@@ -20,7 +20,7 @@ jobs:
       - name: Toolchain
         run: |
           xcodebuild -version
-          xcrun simctl list devices available | grep -E "iPhone (16|17)" | head -5
+          xcrun simctl list runtimes
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
@@ -28,13 +28,16 @@ jobs:
       - name: Unit tests on simulator
         run: |
           set -o pipefail
-          DEST=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries[].value[] | select(.isAvailable and (.name | startswith("iPhone"))) | .name' | head -1)
-          test -n "$DEST"
-          echo "使用模拟器：$DEST"
+          DEST=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | startswith("com.apple.CoreSimulator.SimRuntime.iOS-18-")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))] | first | .udid // empty')
+          if test -z "$DEST"; then
+            echo "缺少可用的 iOS 18 模拟器，拒绝使用其他系统版本替代"
+            exit 1
+          fi
+          echo "使用 iOS 18 模拟器：$DEST"
           xcodebuild test \
             -project VS.xcodeproj \
             -scheme VS \
-            -destination "platform=iOS Simulator,name=$DEST" \
+            -destination "platform=iOS Simulator,id=$DEST" \
             -derivedDataPath DerivedData \
             -resultBundlePath TestResults.xcresult \
             -parallel-testing-enabled NO \

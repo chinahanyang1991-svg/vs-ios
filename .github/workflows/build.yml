@@ -36,13 +36,23 @@ jobs:
             -scheme VS \
             -destination "platform=iOS Simulator,name=$DEST" \
             -derivedDataPath DerivedData \
+            -resultBundlePath TestResults.xcresult \
+            -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee test.log
+      - name: Export UI evidence
+        if: always()
+        run: |
+          if test -d TestResults.xcresult; then
+            xcrun xcresulttool export attachments --path TestResults.xcresult --output-path ui-evidence
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: test-log
-          path: test.log
+          path: |
+            test.log
+            ui-evidence
 
   device-build:
     needs: unit-tests
@@ -68,15 +78,40 @@ jobs:
       - name: Assert app bundle and pack IPA
         run: |
           set -euo pipefail
-          APP=$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          APP=DerivedData/Build/Products/Release-iphoneos/VS.app
           test -d "$APP"
           plutil -extract CFBundleIdentifier raw "$APP/Info.plist" | grep -E "^com\.vs\.app$"
+          test -z "$(find "$APP" -name '*.appex' -print)"
+          test ! -e "$APP/embedded.mobileprovision"
           mkdir -p Payload
           cp -R "$APP" Payload/
           zip -qry VS-unsigned.ipa Payload
           ls -l VS-unsigned.ipa
           shasum -a 256 VS-unsigned.ipa
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, plistlib
+          ipa = pathlib.Path('VS-unsigned.ipa')
+          info = plistlib.loads(pathlib.Path('Payload/VS.app/Info.plist').read_bytes())
+          manifest = {
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'commit': os.environ['GITHUB_SHA'],
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'tests': 'success',
+              'signed': False,
+              'file': ipa.name,
+              'sha256': hashlib.sha256(ipa.read_bytes()).hexdigest(),
+              'bundle_id': info['CFBundleIdentifier'],
+              'version': info['CFBundleShortVersionString'],
+              'build': info['CFBundleVersion'],
+              'minimum_ios': info['MinimumOSVersion'],
+          }
+          pathlib.Path('artifact-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: VS-unsigned-ipa
-          path: VS-unsigned.ipa
+          if-no-files-found: error
+          path: |
+            VS-unsigned.ipa
+            artifact-manifest.json

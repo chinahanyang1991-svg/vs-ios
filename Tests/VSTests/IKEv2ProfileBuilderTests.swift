@@ -162,17 +162,18 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         var s = eapSettings()
         s.name = "VSTest-\(UUID().uuidString.prefix(8))"
         let url = try store.exportProfile(s)
-        defer { store.deleteExportedProfile(url) }
-
-        let names = store.exportedProfiles().map(\.lastPathComponent)
+        let names = try store.exportedProfiles().map(\.lastPathComponent)
         XCTAssertTrue(names.contains(url.lastPathComponent))
         let contents = String(decoding: try Data(contentsOf: url), as: UTF8.self)
         XCTAssertTrue(contents.contains("IKEv2"))
 
-        store.deleteExportedProfile(URL(fileURLWithPath: NSTemporaryDirectory())
-                                        .appendingPathComponent(url.lastPathComponent))
-        XCTAssertTrue(store.exportedProfiles().map(\.lastPathComponent).contains(url.lastPathComponent),
+        XCTAssertThrowsError(try store.deleteExportedProfile(URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(url.lastPathComponent)))
+        XCTAssertTrue(try store.exportedProfiles().map(\.lastPathComponent).contains(url.lastPathComponent),
                       "目录外的同名文件不应被删掉")
+        try store.deleteExportedProfile(url)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(try store.exportedProfiles().isEmpty)
     }
 
     func testHiddenProfileIsStillListed() throws {
@@ -180,8 +181,9 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         var settings = eapSettings()
         settings.name = ".VSTest-\(UUID().uuidString)"
         let url = try store.exportProfile(settings)
-        defer { try? FileManager.default.removeItem(at: url) }
-        XCTAssertTrue(store.exportedProfiles().contains(url), "旧版隐藏文件也必须可见、可删除")
+        XCTAssertTrue(try store.exportedProfiles().contains(url), "旧版隐藏文件也必须可见、可删除")
+        try store.deleteExportedProfile(url)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
     func testFailedDeleteDoesNotReportSuccess() throws {

@@ -6,6 +6,7 @@ struct VPNProfileView: View {
     @State private var exportedURL: URL?
     @State private var errorMessage: String?
     @State private var profiles: [URL] = []
+    @State private var profilesError: String?
 
     var body: some View {
         NavigationStack {
@@ -76,6 +77,7 @@ struct VPNProfileView: View {
                         ShareLink(item: exportedURL,
                                   preview: SharePreview(exportedURL.lastPathComponent))
                             .buttonStyle(.borderedProminent)
+                            .accessibilityLabel("分享描述文件")
                     } else {
                         Button("生成描述文件") { generate() }
                             .buttonStyle(.borderedProminent)
@@ -87,8 +89,11 @@ struct VPNProfileView: View {
                 }
 
                 Section("已导出的描述文件") {
-                    if profiles.isEmpty {
-                        Text("容器里没有残留文件").font(.caption).foregroundStyle(.secondary)
+                    if let profilesError {
+                        Text(profilesError).font(.caption).foregroundStyle(.orange)
+                        Button("重新读取") { reloadProfiles() }
+                    } else if profiles.isEmpty {
+                        Text("未发现已导出的描述文件").font(.caption).foregroundStyle(.secondary)
                     }
                     ForEach(profiles, id: \.self) { url in
                         HStack {
@@ -97,11 +102,9 @@ struct VPNProfileView: View {
                                 Text(sizeText(url)).font(.caption2).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Button("删除", role: .destructive) {
-                                store.deleteExportedProfile(url)
-                                reloadProfiles()
-                            }
-                            .font(.caption)
+                            Button("删除", role: .destructive) { deleteProfile(url) }
+                                .font(.caption)
+                                .accessibilityLabel("删除描述文件 \(url.lastPathComponent)")
                         }
                     }
                     if !profiles.isEmpty {
@@ -150,8 +153,25 @@ struct VPNProfileView: View {
         }
     }
 
+    private func deleteProfile(_ url: URL) {
+        errorMessage = nil
+        do {
+            try store.deleteExportedProfile(url)
+            if exportedURL == url { exportedURL = nil }
+            reloadProfiles()
+        } catch {
+            errorMessage = "删除失败：\(error.localizedDescription)"
+        }
+    }
+
     private func reloadProfiles() {
-        profiles = store.exportedProfiles()
+        do {
+            profiles = try store.exportedProfiles()
+            profilesError = nil
+        } catch {
+            profiles = []
+            profilesError = "无法读取描述文件列表，不能确认是否有残留：\(error.localizedDescription)"
+        }
     }
 
     private func sizeText(_ url: URL) -> String {

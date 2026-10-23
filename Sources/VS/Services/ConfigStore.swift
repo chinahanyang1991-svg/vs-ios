@@ -28,6 +28,7 @@ final class ConfigStore {
 
     private let fileName = "vs-config.json"
     private var storeURL: URL
+    private var subscriptionGeneration = UUID()
 
     init(storeURL: URL? = nil) {
         self.storeURL = storeURL ?? ConfigStore.resolveStoreURL(fileName: fileName)
@@ -37,7 +38,10 @@ final class ConfigStore {
     @MainActor
     func fetchSubscription(url: URL, title: String,
                            fetch: @MainActor (URL) async throws -> String = { try await SubscriptionFetcher.fetch(url: $0) }) async throws -> ParseReport {
+        let generation = subscriptionGeneration
         let body = try await fetch(url)
+        try Task.checkCancellation()
+        guard generation == subscriptionGeneration else { throw CancellationError() }
         return importNodes(from: body, title: title, url: url.absoluteString)
     }
 
@@ -85,6 +89,7 @@ final class ConfigStore {
     }
 
     func removeAll() {
+        subscriptionGeneration = UUID()
         nodes = []
         subscriptions = []
         lastStatus = "已清空"
@@ -112,21 +117,33 @@ final class ConfigStore {
         storeURL.deletingLastPathComponent().appendingPathComponent("Profiles", isDirectory: true)
     }
 
-    func exportedProfiles() -> [URL] {
-        let items = (try? FileManager.default.contentsOfDirectory(
-            at: profilesDirectory,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles])) ?? []
-        return items.filter { $0.pathExtension == "mobileconfig" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    func exportedProfiles() throws -> [URL] {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey]
+        let items: [URL]
+        do {
+            items = try FileManager.default.contentsOfDirectory(
+                at: profilesDirectory, includingPropertiesForKeys: Array(keys))
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return []
+        }
+        return try items.filter { url in
+            guard url.pathExtension == "mobileconfig" else { return false }
+            let values = try url.resourceValues(forKeys: keys)
+            return values.isRegularFile == true && values.isSymbolicLink != true
+        }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    /// 只允许删除本 App 生成在 Profiles 目录里的描述文件，避免误删其他数据。
-    func deleteExportedProfile(_ url: URL) {
-        let standardized = url.standardizedFileURL.path
-        guard standardized.hasPrefix(profilesDirectory.standardizedFileURL.path + "/"),
-              url.pathExtension == "mobileconfig" else { return }
-        try? FileManager.default.removeItem(at: url)
+    func deleteExportedProfile(_ url: URL) throws {
+        guard url.isFileURL,
+              url.standardizedFileURL.deletingLastPathComponent().path == profilesDirectory.standardizedFileURL.path,
+              url.pathExtension == "mobileconfig" else {
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true && values.isSymbolicLink != true else {
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        try FileManager.default.removeItem(at: url)
         lastStatus = "已删除 \(url.lastPathComponent)"
     }
 

@@ -52,8 +52,9 @@ struct SubscriptionListView: View {
                     Text(store.lastStatus).font(.caption).foregroundStyle(.secondary)
                     Button("清空全部节点与记录", role: .destructive) {
                         store.removeAll()
+                        message = busy ? "已清空；正在返回的订阅数据不会重新导入" : ""
                     }
-                    .disabled(store.nodes.isEmpty && store.subscriptions.isEmpty)
+                    .disabled(!busy && store.nodes.isEmpty && store.subscriptions.isEmpty)
                 }
             }
             .navigationTitle("订阅")
@@ -80,6 +81,8 @@ struct SubscriptionListView: View {
         do {
             let report = try await store.fetchSubscription(url: url, title: title)
             message = report.notices.first ?? "新增 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
+        } catch is CancellationError {
+            message = "此次订阅导入已取消，未写入返回的数据"
         } catch {
             message = "拉取失败：\((error as NSError).localizedDescription)"
         }
@@ -108,12 +111,16 @@ enum SubscriptionFetcher {
 }
 
 struct AboutView: View {
-    @Environment(ConfigStore.self) private var store
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "未知"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "未知"
+        return "\(version) (\(build)) 研究版"
+    }
 
     var body: some View {
         Form {
             Section("VS") {
-                LabeledContent("版本", value: "0.1.0 研究版")
+                LabeledContent("版本", value: versionText)
                 LabeledContent("适用系统", value: "iOS 18")
                 LabeledContent("广告与统计", value: "无")
             }
@@ -128,9 +135,9 @@ struct AboutView: View {
                      + "（“VPN”页，导出后用“设置”安装）。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("未实现：SS/VMESS/Trojan 等自定义隧道内核。iOS 的 Packet Tunnel 扩展需要 Apple 付费账号签发的"
-                     + "Personal VPN 权限，免费账号拿不到，所以零费用路线只能对接系统自带 IKEv2 服务端。"
-                     + "另：App 本身尚未签名安装到手机，这一步是整个计划的最后关卡。")
+                Text("未实现：SS/VLESS/VMess/Trojan 自定义隧道内核。Packet Tunnel 使用 Network Extension 权限，"
+                     + "与 Personal VPN 权限不同；本版本不申请这两项能力，而是生成供系统使用的 IKEv2 描述文件。"
+                     + "描述文件需要可用的 IKEv2 服务端；生成文件不代表 VPN 已连通。App 的免费签名、安装与真机运行仍待验证。")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }

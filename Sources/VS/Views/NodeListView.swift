@@ -141,6 +141,7 @@ struct ImportView: View {
     @State private var text = ""
     @State private var report: ParseReport?
     @State private var importError: String?
+    @State private var pasteNotice: String?
 
     var body: some View {
         NavigationStack {
@@ -156,8 +157,18 @@ struct ImportView: View {
                         .font(.footnote.monospaced())
                         .frame(minHeight: 160)
                     Button("粘贴剪贴板内容") {
-                        guard let clip = UIPasteboard.general.string, !clip.isEmpty else { return }
-                        text = text.isEmpty ? clip : text + "\n" + clip
+                        switch PasteInbox.outcome(current: text, clipboard: UIPasteboard.general.string) {
+                        case .appended(let merged):
+                            text = merged
+                            pasteNotice = nil
+                        case .empty:
+                            pasteNotice = "剪贴板：没有可粘贴的内容"
+                        case .unavailable:
+                            pasteNotice = "剪贴板：系统没有交出内容，可能被权限拦截"
+                        }
+                    }
+                    if let pasteNotice {
+                        Text(pasteNotice).font(.caption).foregroundStyle(.orange)
                     }
                 }
                 Section("解析结果") {

@@ -236,4 +236,88 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         XCTAssertEqual(store.nodes.first?.host, "public.example")
         XCTAssertEqual(makeStore().nodes.count, 1)
     }
+
+    // MARK: - 秘密原样
+
+    func testEmbeddedSecretsKeepSurroundingSpaces() throws {
+        var s = eapSettings()
+        s.embedSecrets = true
+        s.password = "  p@ss word  "
+        let ikev2 = try XCTUnwrap(IKEv2ProfileBuilder.vpnPayload(s)["IKEv2"] as? [String: Any])
+        XCTAssertEqual(ikev2["AuthPassword"] as? String, "  p@ss word  ",
+                       "首尾空格是合法密码字符，裁掉就会连不上")
+
+        var psk = IKEv2TunnelSettings()
+        psk.serverHost = "192.0.2.10"
+        psk.authMode = .psk
+        psk.embedSecrets = true
+        psk.sharedSecret = " pad1ng "
+        let secret = try XCTUnwrap(IKEv2ProfileBuilder.vpnPayload(psk)["IKEv2"] as? [String: Any])
+        XCTAssertEqual(secret["SharedSecret"] as? String, " pad1ng ")
+
+        var blank = psk
+        blank.sharedSecret = "   "
+        XCTAssertThrowsError(try IKEv2ProfileBuilder.vpnPayload(blank)) { error in
+            XCTAssertEqual(error as? IKEv2ProfileError, .missingSecret(.psk))
+        }
+    }
+
+    // MARK: - 刷新语义
+
+    @MainActor
+    func testRefreshingSameSubscriptionReplacesOnlyItsNodes() async throws {
+        let store = makeStore()
+        let feed = try XCTUnwrap(URL(string: "https://feed.example/suba"))
+        _ = try await store.fetchSubscription(url: feed, title: "A") { _ in
+            "trojan://p1@one.example:443#one\ntrojan://p2@two.example:443#two"
+        }
+        _ = try store.importNodes(from: "trojan://manual@other.example:443#manual", title: "手动")
+        XCTAssertEqual(store.nodes.count, 3)
+
+        _ = try await store.fetchSubscription(url: feed, title: "A") { _ in
+            "trojan://p1@one.example:443#one\ntrojan://p3@three.example:443#three"
+        }
+        XCTAssertEqual(store.nodes.map(\.host).sorted(),
+                       ["one.example", "other.example", "three.example"],
+                       "服务端删掉的节点要随刷新消失，其他来源要保留")
+        XCTAssertEqual(store.subscriptions.count, 1, "同一订阅地址应归并为一条记录")
+        XCTAssertEqual(makeStore().nodes.map(\.host).sorted(),
+                       ["one.example", "other.example", "three.example"])
+    }
+
+    // MARK: - 落盘内容与失败传播
+
+    func testPersistedFileNeverContainsRawLinks() throws {
+        let url = temporaryDirectory.appendingPathComponent("vs-config.json")
+        let store = ConfigStore(storeURL: url)
+        _ = try store.importNodes(from: "trojan://sup3rsecret@one.example:443#note", title: "t",
+                                 url: "https://feed.example/suba")
+        let json = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+        XCTAssertFalse(json.contains("rawURL"), "整条原始链接是凭据的第二份副本，不得落盘")
+        XCTAssertFalse(json.contains("trojan://sup3rsecret"))
+        XCTAssertTrue(json.contains("sup3rsecret"), "凭据仍需保留才能展示与测速；搬 Keychain 是另一步")
+    }
+
+    func testWriteFailurePropagatesInsteadOfClaimingSuccess() throws {
+        // 模拟器以 runner 普通用户运行，权限位真实生效。
+        let directory = temporaryDirectory.appendingPathComponent("readonly", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = ConfigStore(storeURL: directory.appendingPathComponent("vs-config.json"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+        XCTAssertThrowsError(try store.importNodes(from: "trojan://p@one.example:443#n", title: "t"))
+        XCTAssertFalse(store.lastStatus.hasPrefix("新增"), "写盘失败不能报告“新增 N 个”")
+    }
+
+    func testCorruptFileReloadDoesNotClaimBackup() throws {
+        let directory = temporaryDirectory.appendingPathComponent("corrupt", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("vs-config.json")
+        try Data("[1,2,3]".utf8).write(to: url)
+        let store = ConfigStore(storeURL: url)
+        XCTAssertTrue(store.lastStatus.contains("无法解析") || store.lastStatus.contains("无法读取"),
+                      "实际读数：\(store.lastStatus)")
+        XCTAssertFalse(store.lastStatus.contains("备份"), "代码里没有备份动作，就不能声称已备份")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
 }

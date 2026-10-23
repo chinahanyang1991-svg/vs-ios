@@ -171,6 +171,7 @@ final class SubscriptionParserTests: XCTestCase {
         let encoded = Data(payload.utf8).base64EncodedString().base64URLFromStandard()
         XCTAssertThrowsError(try SubscriptionParser.parseNode(from: "ss://\(encoded)"))
     }
+
 }
 
 private extension String {

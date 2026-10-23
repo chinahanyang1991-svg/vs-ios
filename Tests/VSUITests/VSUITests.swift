@@ -48,10 +48,11 @@ final class VSUITests: XCTestCase {
         let paste = app.buttons["粘贴剪贴板内容"]
         XCTAssertTrue(paste.waitForExistence(timeout: 5))
         paste.tap()
+        dismissPastePermissionIfNeeded()
         // 系统没有内容可给时可能返回 nil 也可能返回空串，两种都必须落到同一条可见提示上；
         // 按钮文案“粘贴剪贴板内容”本身也含“剪贴板”，所以按提示前缀匹配。
         let notice = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "剪贴板：")).firstMatch
-        XCTAssertTrue(notice.waitForExistence(timeout: 5), "读不到剪贴板内容时必须给出可见反馈，不能静默无反应")
+        XCTAssertTrue(notice.waitForExistence(timeout: 10), "读不到剪贴板内容时必须给出可见反馈，不能静默无反应")
         attachScreenshot(app, name: "空剪贴板反馈")
         app.terminate()
     }
@@ -94,6 +95,14 @@ final class VSUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["节点"].waitForExistence(timeout: 10))
         return app
+    }
+
+    @MainActor
+    private func dismissPastePermissionIfNeeded() {
+        // 读系统剪贴板会触发 iOS 18 的“允许粘贴”授权，它属于 SpringBoard，
+        // 不先点掉的话 App 永不空闲，后面的取值查询只会超时。
+        let allowPaste = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow Paste"]
+        if allowPaste.waitForExistence(timeout: 5) { allowPaste.tap() }
     }
 
     @MainActor

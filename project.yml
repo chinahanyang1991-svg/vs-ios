@@ -1,0 +1,56 @@
+name: VS
+bundleIdPrefix: com.vs
+options:
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  generate:
+    enable: true
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  VS:
+    type: application
+    platform: iOS
+    sources:
+      - Sources/VS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vs.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+    entitlements:
+      path: Support/VS.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.vs.app
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: VS
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+  VSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/VSTests
+    dependencies:
+      - target: VS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vs.app.tests
+schemes:
+  VS:
+    build:
+      targets:
+        VS: all
+    test:
+      targets:
+        - VSTests

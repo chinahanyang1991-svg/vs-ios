@@ -29,9 +29,16 @@ final class ConfigStore {
     private let fileName = "vs-config.json"
     private var storeURL: URL
 
-    init() {
-        storeURL = ConfigStore.resolveStoreURL(fileName: fileName)
+    init(storeURL: URL? = nil) {
+        self.storeURL = storeURL ?? ConfigStore.resolveStoreURL(fileName: fileName)
         reload()
+    }
+
+    @MainActor
+    func fetchSubscription(url: URL, title: String,
+                           fetch: @MainActor (URL) async throws -> String = { try await SubscriptionFetcher.fetch(url: $0) }) async throws -> ParseReport {
+        let body = try await fetch(url)
+        return importNodes(from: body, title: title, url: url.absoluteString)
     }
 
     static func resolveStoreURL(fileName: String) -> URL {

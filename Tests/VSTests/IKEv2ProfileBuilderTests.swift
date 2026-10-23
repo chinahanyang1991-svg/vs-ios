@@ -2,6 +2,21 @@ import XCTest
 @testable import VS
 
 final class IKEv2ProfileBuilderTests: XCTestCase {
+    private var temporaryDirectory: URL!
+
+    override func setUpWithError() throws {
+        temporaryDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try FileManager.default.removeItem(at: temporaryDirectory)
+    }
+
+    private func makeStore() -> ConfigStore {
+        ConfigStore(storeURL: temporaryDirectory.appendingPathComponent("vs-config.json"))
+    }
+
     private func eapSettings() -> IKEv2TunnelSettings {
         var s = IKEv2TunnelSettings()
         s.name = "HK-IKEv2"
@@ -85,7 +100,7 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         XCTAssertEqual(ikev2["RemoteAddress"] as? String, "192.0.2.10")
     }
 
-    func testInvalidInputsAreRejected() {
+    func testInvalidInputsAreRejected() throws {
         for bad in ["", "vpn example.com", "https://vpn.example.com", "vpn.example.com:500",
                     "-vpn.example.com", "vpn..example.com", "vpn_example.com"] {
             XCTAssertNil(IKEv2ProfileBuilder.validateHost(bad), "应拒绝 \(bad)")
@@ -143,7 +158,7 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
     }
 
     func testExportedProfileIsListedAndCleanedUp() throws {
-        let store = ConfigStore()
+        let store = makeStore()
         var s = eapSettings()
         s.name = "VSTest-\(UUID().uuidString.prefix(8))"
         let url = try store.exportProfile(s)
@@ -158,5 +173,65 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
                                         .appendingPathComponent(url.lastPathComponent))
         XCTAssertTrue(store.exportedProfiles().map(\.lastPathComponent).contains(url.lastPathComponent),
                       "目录外的同名文件不应被删掉")
+    }
+
+    func testHiddenProfileIsStillListed() throws {
+        let store = makeStore()
+        var settings = eapSettings()
+        settings.name = ".VSTest-\(UUID().uuidString)"
+        let url = try store.exportProfile(settings)
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertTrue(store.exportedProfiles().contains(url), "旧版隐藏文件也必须可见、可删除")
+    }
+
+    func testFailedDeleteDoesNotReportSuccess() throws {
+        let store = makeStore()
+        var settings = eapSettings()
+        settings.name = "VSTest-\(UUID().uuidString)"
+        let url = try store.exportProfile(settings)
+        try FileManager.default.removeItem(at: url)
+        XCTAssertThrowsError(try store.deleteExportedProfile(url))
+        XCTAssertFalse(store.lastStatus.hasPrefix("已删除"))
+    }
+
+    @MainActor
+    func testClearingDiscardsInFlightSubscription() async throws {
+        let store = makeStore()
+        let url = try XCTUnwrap(URL(string: "https://subscription.example/test"))
+        let started = expectation(description: "订阅请求已挂起")
+        var response: CheckedContinuation<String, Error>?
+        let request = Task { @MainActor in
+            try await store.fetchSubscription(url: url, title: "测试", fetch: { _ in
+                try await withCheckedThrowingContinuation { continuation in
+                    response = continuation
+                    started.fulfill()
+                }
+            })
+        }
+        await fulfillment(of: [started], timeout: 3)
+        store.removeAll()
+        response?.resume(returning: "trojan://fake@public.example:443#Test")
+        do {
+            _ = try await request.value
+            XCTFail("清空之前发出的订阅请求不应再提交")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertTrue(store.nodes.isEmpty)
+        XCTAssertTrue(store.subscriptions.isEmpty)
+        XCTAssertTrue(makeStore().nodes.isEmpty)
+    }
+
+    @MainActor
+    func testSubscriptionAfterClearCanStillImport() async throws {
+        let store = makeStore()
+        store.removeAll()
+        let url = try XCTUnwrap(URL(string: "https://subscription.example/test"))
+        let report = try await store.fetchSubscription(url: url, title: "测试", fetch: { _ in
+            "trojan://fake@public.example:443#Test"
+        })
+        XCTAssertEqual(report.nodes.count, 1)
+        XCTAssertEqual(store.nodes.first?.host, "public.example")
+        XCTAssertEqual(makeStore().nodes.count, 1)
     }
 }

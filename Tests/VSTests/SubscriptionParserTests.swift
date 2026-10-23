@@ -95,6 +95,82 @@ final class SubscriptionParserTests: XCTestCase {
         XCTAssertEqual(node.host, "2001:db8::1")
         XCTAssertEqual(node.port, 2083)
     }
+
+    func testVLESSQueryAtSignDoesNotChangeTarget() throws {
+        let node = try SubscriptionParser.parseNode(from: "vless://demo@public.example:443?path=/a@127.0.0.1:22#Demo")
+        XCTAssertEqual(node.kind, .vless)
+        XCTAssertEqual(node.host, "public.example")
+        XCTAssertEqual(node.port, 443)
+        XCTAssertEqual(node.credential, "demo")
+        XCTAssertEqual(node.parameters["path"], "/a@127.0.0.1:22")
+        XCTAssertEqual(node.name, "Demo")
+    }
+
+    func testTrojanQueryAtSignDoesNotChangeTarget() throws {
+        let node = try SubscriptionParser.parseNode(from: "trojan://demo@public.example:443?path=/a@127.0.0.1:22#Demo")
+        XCTAssertEqual(node.kind, .trojan)
+        XCTAssertEqual(node.host, "public.example")
+        XCTAssertEqual(node.port, 443)
+        XCTAssertEqual(node.credential, "demo")
+        XCTAssertEqual(node.parameters["path"], "/a@127.0.0.1:22")
+        XCTAssertEqual(node.name, "Demo")
+    }
+
+    func testMalformedCredentialRejectionDoesNotLeakSecrets() throws {
+        let lines = [
+            "vless://s3cr3tCredentialWithoutAt",
+            "trojan://s3cr3tCredentialWithoutAt"
+        ]
+        for line in lines {
+            let report = SubscriptionParser.parse(line)
+            XCTAssertTrue(report.nodes.isEmpty)
+            XCTAssertEqual(report.rejected.count, 1)
+            let rejection = try XCTUnwrap(report.rejected.first)
+            XCTAssertFalse(rejection.reason.isEmpty)
+            // 检查秘密前缀，避免截断后的泄漏绕过完整凭据断言。
+            XCTAssertFalse(rejection.hint.contains("s3cr3t"))
+            XCTAssertFalse(rejection.reason.contains("s3cr3t"))
+        }
+    }
+
+    func testUnknownSchemeRejectionDoesNotLeakSecrets() throws {
+        let lines = [
+            "unknown://s3cr3tCredentialWithoutAt",
+            "s3cr3t-private-token://demo@public.example:443"
+        ]
+        for line in lines {
+            let report = SubscriptionParser.parse(line)
+            XCTAssertTrue(report.nodes.isEmpty)
+            XCTAssertEqual(report.rejected.count, 1)
+            let rejection = try XCTUnwrap(report.rejected.first)
+            XCTAssertFalse(rejection.reason.isEmpty)
+            // 未知协议名同样是不可信输入，可能包含秘密。
+            XCTAssertFalse(rejection.hint.contains("s3cr3t"))
+            XCTAssertFalse(rejection.reason.contains("s3cr3t"))
+        }
+    }
+
+    func testVMessRejectsPortAbove65535() {
+        let payloads = [
+            """
+            {"v":"2","add":"public.example","port":"65536","id":"demo"}
+            """,
+            """
+            {"v":"2","add":"public.example","port":65536,"id":"demo"}
+            """
+        ]
+        for json in payloads {
+            let encoded = Data(json.utf8).base64EncodedString().base64URLFromStandard()
+            XCTAssertThrowsError(try SubscriptionParser.parseNode(from: "vmess://\(encoded)"))
+        }
+    }
+
+    func testShadowsocksLegacyColonFormatRejectsPortAbove65535() {
+        // 无 @ 的旧式冒号格式走独立解析分支。
+        let payload = "aes-256-gcm:pw123:legacy.example.com:65536"
+        let encoded = Data(payload.utf8).base64EncodedString().base64URLFromStandard()
+        XCTAssertThrowsError(try SubscriptionParser.parseNode(from: "ss://\(encoded)"))
+    }
 }
 
 private extension String {

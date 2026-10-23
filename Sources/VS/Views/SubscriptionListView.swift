@@ -78,8 +78,7 @@ struct SubscriptionListView: View {
         message = ""
         defer { busy = false }
         do {
-            let body = try await SubscriptionFetcher.fetch(url: url)
-            let report = store.importNodes(from: body, title: title, url: url.absoluteString)
+            let report = try await store.fetchSubscription(url: url, title: title)
             message = report.notices.first ?? "新增 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
         } catch {
             message = "拉取失败：\((error as NSError).localizedDescription)"

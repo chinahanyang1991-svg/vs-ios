@@ -9,7 +9,7 @@ struct ParseError: Error {
 }
 
 enum SubscriptionParser {
-    static let maxNodeCount: Int = 10
+    static let maxNodeCount: Int = 2000
 
     static func parse(_ input: String) -> ParseReport {
         var report = ParseReport()
@@ -25,9 +25,14 @@ enum SubscriptionParser {
         }
 
         let body = decodeIfWholeSubscriptionIsBase64(trimmed) ?? trimmed
+        var truncated = false
         for raw in body.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.isEmpty { continue }
+            if report.nodes.count >= maxNodeCount {
+                truncated = true
+                break
+            }
             do {
                 report.nodes.append(try parseNode(from: line))
             } catch let error as ParseError {
@@ -35,6 +40,9 @@ enum SubscriptionParser {
             } catch {
                 report.rejected.append(RejectedLine(hint: safeHint(of: line), reason: "无法解析"))
             }
+        }
+        if truncated {
+            report.notices.append("节点数已达上限 \(maxNodeCount)，后面的条目没有解析")
         }
         return report
     }

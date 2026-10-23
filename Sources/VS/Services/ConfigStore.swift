@@ -14,6 +14,7 @@ private struct Snapshot: Codable {
     var version: Int = 1
     var nodes: [Node] = []
     var subscriptions: [SubscriptionMeta] = []
+    var vpn: IKEv2TunnelSettings?
 }
 
 @Observable
@@ -22,6 +23,7 @@ final class ConfigStore {
 
     private(set) var nodes: [Node] = []
     private(set) var subscriptions: [SubscriptionMeta] = []
+    private(set) var vpnSettings = IKEv2TunnelSettings()
     var lastStatus: String = "尚未导入"
 
     private let fileName = "vs-config.json"
@@ -47,6 +49,7 @@ final class ConfigStore {
         if let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
             nodes = snapshot.nodes
             subscriptions = snapshot.subscriptions
+            if let vpn = snapshot.vpn { vpnSettings = vpn }
             lastStatus = "已载入 \(nodes.count) 个节点"
         } else {
             lastStatus = "本地配置无法读取，已保留原文件备份"
@@ -81,10 +84,31 @@ final class ConfigStore {
         persist()
     }
 
+    func updateVPNSettings(_ settings: IKEv2TunnelSettings) {
+        vpnSettings = settings
+        persist()
+    }
+
+    /// 生成 .mobileconfig 落到 App Group 目录，供系统分享面板交给“设置”安装。
+    /// 注意：勾选“写入凭据”时导出的文件含明文密码，分享完成后应删除副本。
+    func exportProfile(_ settings: IKEv2TunnelSettings) throws -> URL {
+        updateVPNSettings(settings)
+        let data = try IKEv2ProfileBuilder.mobileconfig(settings)
+        let directory = storeURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("Profiles", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent(IKEv2ProfileBuilder.suggestedFileName(settings))
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        lastStatus = "已生成描述文件 \(url.lastPathComponent)"
+        return url
+    }
+
     private func persist() {
         var snapshot = Snapshot()
         snapshot.nodes = nodes
         snapshot.subscriptions = subscriptions
+        snapshot.vpn = vpnSettings
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]

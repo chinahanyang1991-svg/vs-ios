@@ -1,0 +1,122 @@
+import SwiftUI
+
+struct VPNProfileView: View {
+    @Environment(ConfigStore.self) private var store
+    @State private var settings = IKEv2TunnelSettings()
+    @State private var exportedURL: URL?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("服务器") {
+                    TextField("连接名称", text: $settings.name)
+                    TextField("服务器地址（域名或 IPv4）", text: $settings.serverHost)
+                        .font(.body.monospaced())
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                    TextField("本地标识（可留空）", text: $settings.localIdentifier)
+                        .font(.body.monospaced())
+                        .textInputAutocapitalization(.never)
+                }
+
+                Section("认证") {
+                    Picker("方式", selection: $settings.authMode) {
+                        ForEach(IKEv2TunnelSettings.AuthMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    if settings.authMode == .eap {
+                        TextField("用户名", text: $settings.username)
+                            .textInputAutocapitalization(.never)
+                        SecureField("密码（不勾选则连接时手动输入）", text: $settings.password)
+                    } else {
+                        SecureField("共享密钥", text: $settings.sharedSecret)
+                    }
+                    TextField("服务器证书颁发者 CN（可留空）", text: $settings.serverCommonName)
+                        .textInputAutocapitalization(.never)
+                }
+
+                Section("网络") {
+                    TextField("DNS 服务器，逗号分隔（可留空）", text: $settings.dnsInput)
+                        .font(.body.monospaced())
+                        .textInputAutocapitalization(.never)
+                    Picker("心跳检测", selection: $settings.deadPeerRate) {
+                        Text("关闭").tag(IKEv2TunnelSettings.DeadPeerRate.none)
+                        Text("低").tag(IKEv2TunnelSettings.DeadPeerRate.low)
+                        Text("中").tag(IKEv2TunnelSettings.DeadPeerRate.medium)
+                        Text("高").tag(IKEv2TunnelSettings.DeadPeerRate.high)
+                    }
+                }
+
+                Section {
+                    Toggle("把凭据写入描述文件", isOn: $settings.embedSecrets)
+                    Text(settings.embedSecrets
+                         ? "导出的 .mobileconfig 含明文密码，安装完请删掉文件副本。"
+                         : "描述文件不含密码，第一次连接时 iOS 会弹窗要求输入。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("安全")
+                }
+
+                Section("生成结果") {
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                    }
+                    if !settings.serverHost.isEmpty {
+                        Text(IKEv2ProfileBuilder.sanitizedSummary(settings))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let exportedURL {
+                        ShareLink(item: exportedURL,
+                                  preview: SharePreview(exportedURL.lastPathComponent))
+                            .buttonStyle(.borderedProminent)
+                    } else {
+                        Button("生成描述文件") { generate() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+
+                Section("安装步骤") {
+                    steps
+                }
+            }
+            .navigationTitle("VPN 描述文件")
+            .background(GlassBackground())
+            .onAppear(perform: syncFromStore)
+            .onDisappear { store.updateVPNSettings(settings) }
+            .onChange(of: settings) { _, _ in exportedURL = nil }
+        }
+    }
+
+    private var steps: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("点“生成描述文件”，再用分享面板选“存储到文件”。", systemImage: "1.circle")
+            Label("iPhone 上打开该 .mobileconfig，右上角允许下载配置描述文件。", systemImage: "2.circle")
+            Label("设置 → 通用 → VPN 与设备管理 → 安装，然后在“设置 → VPN”里连接。", systemImage: "3.circle")
+            Label("VS 不劫持系统网络，走的是 iOS 自带的 IKEv2 通道，因此不需要付费开发者账号。", systemImage: "checkmark.seal")
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+    }
+
+    private func syncFromStore() {
+        var restored = store.vpnSettings
+        restored.password = settings.password
+        restored.sharedSecret = settings.sharedSecret
+        settings = restored
+    }
+
+    private func generate() {
+        errorMessage = nil
+        do {
+            exportedURL = try store.exportProfile(settings)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}

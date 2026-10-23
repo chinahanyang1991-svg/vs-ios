@@ -18,6 +18,8 @@ struct RootView: View {
         TabView {
             NodeListView()
                 .tabItem { Label("节点", systemImage: "antenna.radiowaves.left.and.right") }
+            VPNProfileView()
+                .tabItem { Label("VPN", systemImage: "lock.shield") }
             SubscriptionListView()
                 .tabItem { Label("订阅", systemImage: "tray.and.arrow.down") }
             AboutView()

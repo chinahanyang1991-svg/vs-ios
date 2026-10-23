@@ -9,6 +9,8 @@ struct ParseError: Error {
 }
 
 enum SubscriptionParser {
+    static let maxNodeCount: Int = 10
+
     static func parse(_ input: String) -> ParseReport {
         var report = ParseReport()
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)

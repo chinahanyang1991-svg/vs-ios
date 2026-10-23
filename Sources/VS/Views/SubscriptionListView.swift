@@ -93,27 +93,6 @@ struct SubscriptionListView: View {
     }
 }
 
-enum SubscriptionFetcher {
-    static func fetch(url: URL, timeout: TimeInterval = 15) async throws -> String {
-        var request = URLRequest(url: url, timeoutInterval: timeout)
-        request.setValue("VS/0.1", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw NSError(domain: "SubscriptionFetcher", code: http.statusCode)
-        }
-        guard let text = String(data: data, encoding: .utf8) else {
-            throw NSError(domain: "SubscriptionFetcher", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "订阅内容不是文本"])
-        }
-        let head = text.prefix(400).lowercased()
-        if head.contains("<!doctype html") || head.contains("<html") {
-            throw NSError(domain: "SubscriptionFetcher", code: -2,
-                          userInfo: [NSLocalizedDescriptionKey: "返回的是网页而不是订阅内容，可能需要先登录或换直连地址"])
-        }
-        return text
-    }
-}
-
 struct AboutView: View {
     private var versionText: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "未知"

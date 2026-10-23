@@ -172,6 +172,17 @@ final class SubscriptionParserTests: XCTestCase {
         XCTAssertThrowsError(try SubscriptionParser.parseNode(from: "ss://\(encoded)"))
     }
 
+    func testParsingStopsAtNodeCountCap() throws {
+        let lines = (1...SubscriptionParser.maxNodeCount + 50).map {
+            "trojan://pw\($0)@h\($0).example:443#n\($0)"
+        }.joined(separator: "\n")
+        let report = SubscriptionParser.parse(lines)
+        XCTAssertEqual(report.nodes.count, SubscriptionParser.maxNodeCount,
+                       "超出上限的条目不得进入内存")
+        XCTAssertTrue(report.notices.contains { $0.contains("上限") },
+                      "被截断必须如实提示，不能装作全量导入")
+    }
+
 }
 
 private extension String {

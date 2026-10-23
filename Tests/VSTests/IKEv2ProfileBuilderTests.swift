@@ -135,4 +135,22 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         s.name = ""
         XCTAssertEqual(IKEv2ProfileBuilder.suggestedFileName(s), "VS-IKEv2.mobileconfig")
     }
+
+    func testExportedProfileIsListedAndCleanedUp() throws {
+        let store = ConfigStore()
+        var s = eapSettings()
+        s.name = "VSTest-\(UUID().uuidString.prefix(8))"
+        let url = try store.exportProfile(s)
+        defer { store.deleteExportedProfile(url) }
+
+        let names = store.exportedProfiles().map(\.lastPathComponent)
+        XCTAssertTrue(names.contains(url.lastPathComponent))
+        let contents = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+        XCTAssertTrue(contents.contains("IKEv2"))
+
+        store.deleteExportedProfile(URL(fileURLWithPath: NSTemporaryDirectory())
+                                        .appendingPathComponent(url.lastPathComponent))
+        XCTAssertTrue(store.exportedProfiles().map(\.lastPathComponent).contains(url.lastPathComponent),
+                      "目录外的同名文件不应被删掉")
+    }
 }

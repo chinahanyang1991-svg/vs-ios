@@ -94,14 +94,33 @@ final class ConfigStore {
     func exportProfile(_ settings: IKEv2TunnelSettings) throws -> URL {
         updateVPNSettings(settings)
         let data = try IKEv2ProfileBuilder.mobileconfig(settings)
-        let directory = storeURL
-            .deletingLastPathComponent()
-            .appendingPathComponent("Profiles", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent(IKEv2ProfileBuilder.suggestedFileName(settings))
+        try FileManager.default.createDirectory(at: profilesDirectory, withIntermediateDirectories: true)
+        let url = profilesDirectory.appendingPathComponent(IKEv2ProfileBuilder.suggestedFileName(settings))
         try data.write(to: url, options: [.atomic, .completeFileProtection])
         lastStatus = "已生成描述文件 \(url.lastPathComponent)"
         return url
+    }
+
+    private var profilesDirectory: URL {
+        storeURL.deletingLastPathComponent().appendingPathComponent("Profiles", isDirectory: true)
+    }
+
+    func exportedProfiles() -> [URL] {
+        let items = (try? FileManager.default.contentsOfDirectory(
+            at: profilesDirectory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles])) ?? []
+        return items.filter { $0.pathExtension == "mobileconfig" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// 只允许删除本 App 生成在 Profiles 目录里的描述文件，避免误删其他数据。
+    func deleteExportedProfile(_ url: URL) {
+        let standardized = url.standardizedFileURL.path
+        guard standardized.hasPrefix(profilesDirectory.standardizedFileURL.path + "/"),
+              url.pathExtension == "mobileconfig" else { return }
+        try? FileManager.default.removeItem(at: url)
+        lastStatus = "已删除 \(url.lastPathComponent)"
     }
 
     private func persist() {

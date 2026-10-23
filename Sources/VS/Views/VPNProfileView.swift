@@ -5,6 +5,7 @@ struct VPNProfileView: View {
     @State private var settings = IKEv2TunnelSettings()
     @State private var exportedURL: URL?
     @State private var errorMessage: String?
+    @State private var profiles: [URL] = []
 
     var body: some View {
         NavigationStack {
@@ -84,10 +85,38 @@ struct VPNProfileView: View {
                 Section("安装步骤") {
                     steps
                 }
+
+                Section("已导出的描述文件") {
+                    if profiles.isEmpty {
+                        Text("容器里没有残留文件").font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(profiles, id: \.self) { url in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(url.lastPathComponent).font(.callout.monospaced())
+                                Text(sizeText(url)).font(.caption2).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("删除", role: .destructive) {
+                                store.deleteExportedProfile(url)
+                                reloadProfiles()
+                            }
+                            .font(.caption)
+                        }
+                    }
+                    if !profiles.isEmpty {
+                        Text("含明文密码的文件用完请删掉。")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
             .navigationTitle("VPN 描述文件")
             .background(GlassBackground())
-            .onAppear(perform: syncFromStore)
+            .onAppear {
+                syncFromStore()
+                reloadProfiles()
+            }
             .onDisappear { store.updateVPNSettings(settings) }
             .onChange(of: settings) { _, _ in exportedURL = nil }
         }
@@ -115,8 +144,18 @@ struct VPNProfileView: View {
         errorMessage = nil
         do {
             exportedURL = try store.exportProfile(settings)
+            reloadProfiles()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func reloadProfiles() {
+        profiles = store.exportedProfiles()
+    }
+
+    private func sizeText(_ url: URL) -> String {
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
 }

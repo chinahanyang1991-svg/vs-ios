@@ -9,36 +9,34 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app || true
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep -E "iPhone (16|17)" | head -5
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
         run: xcodegen generate
-      - name: Run parser tests on simulator
+      - name: Unit tests on simulator
         run: |
           set -o pipefail
+          DEST=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries[].value[] | select(.isAvailable and (.name | startswith("iPhone"))) | .name' | head -1)
+          test -n "$DEST"
+          echo "使用模拟器：$DEST"
           xcodebuild test \
+            -project VS.xcodeproj \
             -scheme VS \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            | xcpretty || tail -n 200 build/test-last-log.txt || true
-      - name: Keep raw log on failure
-        if: failure()
-        run: |
-          xcodebuild test -scheme VS -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO > raw-test.log 2>&1 || true
-          grep -nE "error:|failed|XCTAssert" raw-test.log | tail -n 80
+            -destination "platform=iOS Simulator,name=$DEST" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee test.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-logs
-          path: raw-test.log
-          optional: true
+          name: test-log
+          path: test.log
 
   device-build:
-    needs: unit-tests
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -54,15 +52,14 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath DerivedData \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee device-build.log
       - name: Assert app bundle and pack IPA
         run: |
           set -euo pipefail
           APP=$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
           test -d "$APP"
-          test -f "$APP/Info.plist"
-          plutil -p "$APP/Info.plist" | grep -E "com.vs.app"
+          plutil -extract CFBundleIdentifier raw "$APP/Info.plist" | grep -E "^com\.vs\.app$"
           mkdir -p Payload
           cp -R "$APP" Payload/
           zip -qry VS-unsigned.ipa Payload

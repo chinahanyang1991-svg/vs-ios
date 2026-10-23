@@ -18,6 +18,10 @@ final class VSUITests: XCTestCase {
         let paste = app.buttons["粘贴剪贴板内容"]
         XCTAssertTrue(paste.waitForExistence(timeout: 5), "导入页要有真正可用的剪贴板入口")
         paste.tap()
+        // 读系统剪贴板会触发 iOS 18 的“允许粘贴”授权，它属于 SpringBoard，
+        // 不先点掉的话 App 永不空闲，后面的取值查询只会超时。
+        let allowPaste = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow Paste"]
+        if allowPaste.waitForExistence(timeout: 5) { allowPaste.tap() }
         XCTAssertEqual(editor.value as? String, link, "剪贴板内容必须原样进入输入框")
         attachScreenshot(app, name: "节点原始输入")
         app.navigationBars["导入"].buttons["导入"].tap()

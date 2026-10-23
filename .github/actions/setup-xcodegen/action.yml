@@ -24,7 +24,8 @@ runs:
         mkdir -p "$PREFIX"
         bash "$RUNNER_TEMP/xcodegen-$INPUT_VERSION/xcodegen/install.sh" "$PREFIX"
         echo "$PREFIX/bin" >> "$GITHUB_PATH"
-        OUT="$(xcodegen --version)"
+        # $GITHUB_PATH 只对后续步骤生效，同一步里必须用绝对路径调用，否则 command not found。
+        OUT="$("$PREFIX/bin/xcodegen" --version)"
         echo "$OUT"
         case "$OUT" in
           *"$INPUT_VERSION"*) ;;

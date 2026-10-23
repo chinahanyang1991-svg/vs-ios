@@ -13,8 +13,12 @@ final class VSUITests: XCTestCase {
         let editor = app.textViews.firstMatch
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         editor.tap()
-        editor.typeText("vless://demo@public.example:443?path=/a@127.0.0.1:22#UI-Test")
+        let link = "vless://demo@public.example:443?path=/a@127.0.0.1:22#UI-Test"
+        editor.typeText(link)
+        XCTAssertEqual(editor.value as? String, link)
+        attachScreenshot(app, name: "节点原始输入")
         app.navigationBars["导入"].buttons["导入"].tap()
+        XCTAssertEqual(editor.value as? String, link)
         app.navigationBars["导入"].buttons["关闭"].tap()
         XCTAssertTrue(app.staticTexts["public.example:443"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["127.0.0.1:22"].exists)

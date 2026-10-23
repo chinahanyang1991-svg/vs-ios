@@ -133,6 +133,9 @@ struct ImportView: View {
                 }
                 Section("节点链接或订阅正文") {
                     TextEditor(text: $text)
+                        .keyboardType(.asciiCapable)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         .font(.footnote.monospaced())
                         .frame(minHeight: 160)
                 }

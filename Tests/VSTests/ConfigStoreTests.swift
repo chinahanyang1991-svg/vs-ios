@@ -93,4 +93,89 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(store.nodeCount(forSourceURL: feed), 1, "其他来源的节点不计入这条订阅")
         XCTAssertEqual(store.nodeCount(forSourceURL: nil), 1, "手动粘贴的节点单独计数")
     }
+
+    // MARK: - 编辑节点
+
+    func testUpdateNodePersistsRenameAndKeepsSource() throws {
+        let store = makeStore()
+        let feed = "https://feed.example/a"
+        _ = try store.importNodes(from: "trojan://p1@one.example:443#one", title: "A", url: feed)
+        let original = try XCTUnwrap(store.nodes.first)
+
+        var renamed = original
+        renamed.name = "改过的名字"
+        try store.updateNode(id: original.id, to: renamed)
+
+        XCTAssertEqual(store.nodes.map(\.name), ["改过的名字"])
+        XCTAssertEqual(store.nodes.first?.sourceURL, feed, "编辑不能把节点从它的订阅来源里摘出去")
+        XCTAssertEqual(makeStore().nodes.map(\.name), ["改过的名字"], "编辑必须落盘，重启后不能回到旧名字")
+    }
+
+    func testUpdateNodeRejectsInvalidPortOrBlankName() throws {
+        let store = makeStore()
+        _ = try store.importNodes(from: "trojan://p1@one.example:443#one", title: "A",
+                                  url: "https://feed.example/a")
+        let original = try XCTUnwrap(store.nodes.first)
+
+        for badPort in [0, 65536] {
+            var invalid = original
+            invalid.port = badPort
+            XCTAssertThrowsError(try store.updateNode(id: original.id, to: invalid),
+                                 "端口 \(badPort) 不可能是合法服务端口，必须报错而不是写进配置")
+        }
+        var blank = original
+        blank.name = "   "
+        XCTAssertThrowsError(try store.updateNode(id: original.id, to: blank),
+                             "全空白的名字会让列表变成一串空白，必须拒绝")
+
+        XCTAssertEqual(store.nodes, [original], "非法输入不能改动内存里已落盘的节点")
+        XCTAssertEqual(makeStore().nodes, [original], "非法输入不能污染磁盘")
+    }
+
+    func testUpdateNodeRejectsCollisionWithExistingNode() throws {
+        let store = makeStore()
+        _ = try store.importNodes(from: "trojan://p1@one.example:443#one\ntrojan://p2@two.example:443#two",
+                                  title: "A", url: "https://feed.example/a")
+        XCTAssertEqual(store.nodes.count, 2)
+        let first = try XCTUnwrap(store.nodes.first(where: { $0.host == "one.example" }))
+        let other = try XCTUnwrap(store.nodes.first(where: { $0.host == "two.example" }))
+
+        var clash = first
+        clash.name = other.name
+        clash.host = other.host
+        clash.port = other.port
+        clash.credential = other.credential
+        XCTAssertThrowsError(try store.updateNode(id: first.id, to: clash),
+                             "改成与另一个节点完全相同会静默丢掉一条，必须报错")
+        XCTAssertEqual(store.nodes.count, 2)
+        XCTAssertEqual(Set(store.nodes.map(\.host)), ["one.example", "two.example"])
+    }
+
+    func testUpdateNodeRejectsUnknownIdentifier() throws {
+        let store = makeStore()
+        _ = try store.importNodes(from: "trojan://p1@one.example:443#one", title: "A")
+        var edited = try XCTUnwrap(store.nodes.first)
+        edited.name = "改过"
+        XCTAssertThrowsError(try store.updateNode(id: "trojan|missing.example|443|没有", to: edited),
+                             "找不到要改的节点就该报错，而不是当成“已经改好了”")
+        XCTAssertEqual(store.nodes.map(\.name), ["one"])
+    }
+
+    func testUpdateNodeWriteFailureKeepsMemoryUnchanged() throws {
+        let directory = temporaryDirectory.appendingPathComponent("readonly-edit", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("vs-config.json")
+        let seeded = ConfigStore(storeURL: url)
+        _ = try seeded.importNodes(from: "trojan://p1@one.example:443#one", title: "A")
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+
+        let store = ConfigStore(storeURL: url)
+        let original = try XCTUnwrap(store.nodes.first)
+        var renamed = original
+        renamed.name = "改过"
+        XCTAssertThrowsError(try store.updateNode(id: original.id, to: renamed))
+        XCTAssertEqual(store.nodes.map(\.name), ["one"],
+                       "写盘失败时内存不能提前换成新名字，否则磁盘与内存各有一套真相")
+    }
 }

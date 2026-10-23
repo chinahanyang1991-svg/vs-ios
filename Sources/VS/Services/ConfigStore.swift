@@ -108,6 +108,9 @@ final class ConfigStore {
         nodes = remaining
     }
 
+    func updateNode(id: String, to updated: Node) throws {
+    }
+
     /// 删除整条订阅记录，并带走它来源的节点；其他来源与手动粘贴的节点保留。
     /// 写盘失败会抛出，内存保持删除前不变。
     func removeSubscription(_ subscription: SubscriptionMeta) throws {

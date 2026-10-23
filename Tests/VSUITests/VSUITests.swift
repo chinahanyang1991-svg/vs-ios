@@ -40,6 +40,23 @@ final class VSUITests: XCTestCase {
     }
 
     @MainActor
+    func testPasteOnEmptyClipboardGivesVisibleNotice() throws {
+        let app = launchApp()
+        UIPasteboard.general.string = ""
+        app.tabBars.buttons["节点"].tap()
+        app.buttons["粘贴链接"].tap()
+        let paste = app.buttons["粘贴剪贴板内容"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 5))
+        paste.tap()
+        // 系统没有内容可给时可能返回 nil 也可能返回空串，两种都必须落到同一条可见提示上；
+        // 按钮文案“粘贴剪贴板内容”本身也含“剪贴板”，所以按提示前缀匹配。
+        let notice = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "剪贴板：")).firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 5), "读不到剪贴板内容时必须给出可见反馈，不能静默无反应")
+        attachScreenshot(app, name: "空剪贴板反馈")
+        app.terminate()
+    }
+
+    @MainActor
     func testProfileValidationExportAndDelete() throws {
         let app = launchApp()
         app.tabBars.buttons["VPN"].tap()

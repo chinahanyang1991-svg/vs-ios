@@ -6,8 +6,15 @@ struct SubscriptionMeta: Identifiable, Codable, Hashable {
     var title: String
     var url: String?
     var addedAt: Date
-    var nodeCount: Int
     var rejectedCount: Int
+}
+
+enum ConfigStoreError: LocalizedError {
+    case unknownSubscription
+
+    var errorDescription: String? {
+        "这条订阅记录已不在本地，未删除任何节点"
+    }
 }
 
 private struct Snapshot: Codable {
@@ -83,8 +90,7 @@ final class ConfigStore {
         if let url {
             let index = metas.firstIndex(where: { $0.url == url })
             let meta = SubscriptionMeta(id: index.map { metas[$0].id } ?? UUID(), title: title, url: url,
-                                        addedAt: .now, nodeCount: report.nodes.count,
-                                        rejectedCount: report.rejected.count)
+                                        addedAt: .now, rejectedCount: report.rejected.count)
             if let index { metas[index] = meta } else { metas.append(meta) }
         }
 
@@ -102,12 +108,25 @@ final class ConfigStore {
         nodes = remaining
     }
 
-    // 红轮占位：故意什么都不做，用来取真实断言读数，G 轮立即替换成实现。
+    /// 删除整条订阅记录，并带走它来源的节点；其他来源与手动粘贴的节点保留。
+    /// 写盘失败会抛出，内存保持删除前不变。
     func removeSubscription(_ subscription: SubscriptionMeta) throws {
+        guard let url = subscription.url,
+              subscriptions.contains(where: { $0.id == subscription.id && $0.url == url }) else {
+            throw ConfigStoreError.unknownSubscription
+        }
+        let remainingNodes = nodes.filter { $0.sourceURL != url }
+        let remainingMetas = subscriptions.filter { $0.id != subscription.id }
+        let removedCount = nodes.count - remainingNodes.count
+        try write(nodes: remainingNodes, subscriptions: remainingMetas)
+        nodes = remainingNodes
+        subscriptions = remainingMetas
+        lastStatus = "已删除订阅「\(subscription.title)」及其 \(removedCount) 个节点"
     }
 
+    /// 该来源当前实际有多少节点，手动删过也跟着变；传 nil 统计手动粘贴的节点。
     func nodeCount(forSourceURL url: String?) -> Int {
-        subscriptions.first(where: { $0.url == url })?.nodeCount ?? 0
+        nodes.filter { $0.sourceURL == url }.count
     }
 
     func removeAll() throws {

@@ -48,7 +48,7 @@ final class ConfigStoreTests: XCTestCase {
         let feed = "https://feed.example/a"
         _ = try store.importNodes(from: "trojan://p1@one.example:443#one", title: "A", url: feed)
         var stranger = SubscriptionMeta(id: UUID(), title: "陌生", url: "https://feed.example/zzz",
-                                        addedAt: .now, nodeCount: 1, rejectedCount: 0)
+                                        addedAt: .now, rejectedCount: 0)
         XCTAssertThrowsError(try store.removeSubscription(stranger),
                              "记录里没有这条订阅，就该报错而不是当成“删光了”")
         XCTAssertEqual(store.nodes.count, 1)

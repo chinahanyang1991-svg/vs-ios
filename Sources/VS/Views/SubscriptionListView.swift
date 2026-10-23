@@ -5,6 +5,11 @@ struct SubscriptionListView: View {
     @State private var urlText = ""
     @State private var busy = false
     @State private var message = ""
+    @State private var pendingDelete: SubscriptionMeta?
+
+    private var deleteShown: Binding<Bool> {
+        Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
+    }
 
     var body: some View {
         NavigationStack {
@@ -37,8 +42,15 @@ struct SubscriptionListView: View {
                                     .disabled(busy)
                                     .font(.caption)
                                 }
+                                if item.url != nil {
+                                    Button("删除该订阅及其节点", role: .destructive) {
+                                        pendingDelete = item
+                                    }
+                                    .disabled(busy)
+                                    .font(.caption)
+                                }
                             }
-                            Text("\(item.addedAt.formatted(date: .omitted, time: .shortened)) · 可用 \(item.nodeCount) · 拒绝 \(item.rejectedCount)")
+                            Text("\(item.addedAt.formatted(date: .omitted, time: .shortened)) · 可用 \(store.nodeCount(forSourceURL: item.url)) · 上次拒绝 \(item.rejectedCount)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if let string = item.url {
@@ -62,6 +74,21 @@ struct SubscriptionListView: View {
                 }
             }
             .navigationTitle("订阅")
+            .confirmationDialog("删除订阅记录", isPresented: deleteShown, titleVisibility: .visible) {
+                Button("删除", role: .destructive) {
+                    defer { pendingDelete = nil }
+                    guard let target = pendingDelete else { return }
+                    do {
+                        try store.removeSubscription(target)
+                        message = ""
+                    } catch {
+                        message = "删除未生效：\((error as NSError).localizedDescription)"
+                    }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("只会删除这条订阅带来的节点，其他订阅与手动粘贴的节点会保留。")
+            }
         }
     }
 

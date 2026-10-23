@@ -1,10 +1,12 @@
 import SwiftUI
+import UIKit
 
 struct NodeListView: View {
     @Environment(ConfigStore.self) private var store
     @State private var latencies: [String: ProbeOutcome] = [:]
     @State private var isProbing = false
     @State private var showImport = false
+    @State private var storeError: String?
 
     var body: some View {
         NavigationStack {
@@ -29,6 +31,16 @@ struct NodeListView: View {
                 .sheet(isPresented: $showImport) {
                     ImportView()
                 }
+                .safeAreaInset(edge: .bottom) {
+                    if let storeError {
+                        Text(storeError)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.thinMaterial)
+                    }
+                }
         }
     }
 
@@ -51,8 +63,12 @@ struct NodeListView: View {
                         .listRowSeparator(.hidden)
                         .swipeActions {
                             Button("删除", role: .destructive) {
-                                store.removeNode(node)
-                                latencies.removeValue(forKey: node.id)
+                                do {
+                                    try store.removeNode(node)
+                                    latencies.removeValue(forKey: node.id)
+                                } catch {
+                                    storeError = "删除未生效：本地文件写入失败，节点仍然保留"
+                                }
                             }
                         }
                 }
@@ -124,6 +140,7 @@ struct ImportView: View {
     @State private var title = "手动粘贴"
     @State private var text = ""
     @State private var report: ParseReport?
+    @State private var importError: String?
 
     var body: some View {
         NavigationStack {
@@ -138,8 +155,15 @@ struct ImportView: View {
                         .autocorrectionDisabled()
                         .font(.footnote.monospaced())
                         .frame(minHeight: 160)
+                    Button("粘贴剪贴板内容") {
+                        guard let clip = UIPasteboard.general.string, !clip.isEmpty else { return }
+                        text = text.isEmpty ? clip : text + "\n" + clip
+                    }
                 }
                 Section("解析结果") {
+                    if let importError {
+                        Text(importError).font(.caption).foregroundStyle(.orange)
+                    }
                     if let report {
                         LabeledContent("可用节点", value: "\(report.nodes.count)")
                         LabeledContent("被拒绝", value: "\(report.rejected.count)")
@@ -164,7 +188,13 @@ struct ImportView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("导入") {
-                        report = store.importNodes(from: text, title: title.isEmpty ? "未命名" : title)
+                        do {
+                            report = try store.importNodes(from: text, title: title.isEmpty ? "未命名" : title)
+                            importError = nil
+                        } catch {
+                            report = nil
+                            importError = "导入未生效：本地文件写入失败，节点没有保存"
+                        }
                     }
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }

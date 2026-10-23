@@ -51,8 +51,12 @@ struct SubscriptionListView: View {
                     LabeledContent("当前节点数", value: "\(store.nodes.count)")
                     Text(store.lastStatus).font(.caption).foregroundStyle(.secondary)
                     Button("清空全部节点与记录", role: .destructive) {
-                        store.removeAll()
-                        message = busy ? "已清空；正在返回的订阅数据不会重新导入" : ""
+                        do {
+                            try store.removeAll()
+                            message = busy ? "已清空；正在返回的订阅数据不会重新导入" : ""
+                        } catch {
+                            message = "清空未生效：本地文件写入失败"
+                        }
                     }
                     .disabled(!busy && store.nodes.isEmpty && store.subscriptions.isEmpty)
                 }
@@ -80,7 +84,7 @@ struct SubscriptionListView: View {
         defer { busy = false }
         do {
             let report = try await store.fetchSubscription(url: url, title: title)
-            message = report.notices.first ?? "新增 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
+            message = report.notices.first ?? "解析 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
         } catch is CancellationError {
             message = "此次订阅导入已取消，未写入返回的数据"
         } catch {

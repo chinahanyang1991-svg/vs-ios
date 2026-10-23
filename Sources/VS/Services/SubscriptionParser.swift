@@ -48,17 +48,17 @@ enum SubscriptionParser {
 
         switch scheme {
         case "vless", "trojan":
-            return try parseUserinfo(kind: scheme == "vless" ? .vless : .trojan, rest: rest, raw: line)
+            return try parseUserinfo(kind: scheme == "vless" ? .vless : .trojan, rest: rest)
         case "ss", "shadowsocks":
-            return try parseShadowsocks(rest: rest, raw: line)
+            return try parseShadowsocks(rest: rest)
         case "vmess":
-            return try parseVMess(rest: rest, raw: line)
+            return try parseVMess(rest: rest)
         default:
             throw ParseError("不支持的协议")
         }
     }
 
-    private static func parseUserinfo(kind: NodeKind, rest: String, raw: String) throws -> Node {
+    private static func parseUserinfo(kind: NodeKind, rest: String) throws -> Node {
         let (body, remark) = splitFragment(rest)
         var authority = body
         var queryText = ""
@@ -82,10 +82,10 @@ enum SubscriptionParser {
         let name = remark.isEmpty ? "\(host):\(port)" : remark
 
         return Node(name: name, kind: kind, host: host, port: port,
-                    credential: credential, method: nil, parameters: parameters, rawURL: raw)
+                    credential: credential, method: nil, parameters: parameters)
     }
 
-    private static func parseShadowsocks(rest: String, raw: String) throws -> Node {
+    private static func parseShadowsocks(rest: String) throws -> Node {
         let (body, remark) = splitFragment(rest)
 
         if let atIndex = body.firstIndex(of: "@") {
@@ -106,7 +106,7 @@ enum SubscriptionParser {
             let (method, password) = try splitMethodColonPassword(infoText)
             let name = remark.isEmpty ? "\(host):\(port)" : remark
             return Node(name: name, kind: .shadowsocks, host: host, port: port,
-                        credential: password, method: method, parameters: parseQuery(queryText), rawURL: raw)
+                        credential: password, method: method, parameters: parseQuery(queryText))
         }
 
         guard let decoded = body.base64URLDecodedToString() else {
@@ -117,7 +117,7 @@ enum SubscriptionParser {
             let (host, port) = try parseHostPort(String(decoded[decoded.index(after: atIndex)...]))
             let name = remark.isEmpty ? "\(host):\(port)" : remark
             return Node(name: name, kind: .shadowsocks, host: host, port: port,
-                        credential: password, method: method, parameters: [:], rawURL: raw)
+                        credential: password, method: method, parameters: [:])
         }
 
         let components = decoded.split(separator: ":", omittingEmptySubsequences: false)
@@ -128,10 +128,10 @@ enum SubscriptionParser {
         let (method, password) = try splitMethodColonPassword(components.dropLast(2).joined(separator: ":"))
         let name = remark.isEmpty ? "\(host):\(port)" : remark
         return Node(name: name, kind: .shadowsocks, host: host, port: port,
-                    credential: password, method: method, parameters: [:], rawURL: raw)
+                    credential: password, method: method, parameters: [:])
     }
 
-    private static func parseVMess(rest: String, raw: String) throws -> Node {
+    private static func parseVMess(rest: String) throws -> Node {
         let (body, remark) = splitFragment(rest)
         guard let jsonText = body.base64URLDecodedToString(),
               let data = jsonText.data(using: .utf8),
@@ -161,7 +161,7 @@ enum SubscriptionParser {
 
         let name = remark.isEmpty ? ((object["ps"] as? String) ?? "\(host):\(port)") : remark
         return Node(name: name, kind: .vmess, host: host, port: port,
-                    credential: uuid, method: nil, parameters: parameters, rawURL: raw)
+                    credential: uuid, method: nil, parameters: parameters)
     }
 
     // MARK: - 工具

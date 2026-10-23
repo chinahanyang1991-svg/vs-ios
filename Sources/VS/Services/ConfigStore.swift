@@ -42,7 +42,7 @@ final class ConfigStore {
         let body = try await fetch(url)
         try Task.checkCancellation()
         guard generation == subscriptionGeneration else { throw CancellationError() }
-        return importNodes(from: body, title: title, url: url.absoluteString)
+        return try importNodes(from: body, title: title, url: url.absoluteString)
     }
 
     static func resolveStoreURL(fileName: String) -> URL {
@@ -63,48 +63,62 @@ final class ConfigStore {
             if let vpn = snapshot.vpn { vpnSettings = vpn }
             lastStatus = "已载入 \(nodes.count) 个节点"
         } else {
-            lastStatus = "本地配置无法读取，已保留原文件备份"
+            lastStatus = "本地配置无法读取，原文件保持未改动"
         }
     }
 
+    /// 导入。带 url 时按来源整批替换：该来源被服务端删掉的节点随刷新消失，
+    /// 其他来源与手动粘贴的节点保留。写盘失败会抛出，内存保持导入前不变。
     @discardableResult
-    func importNodes(from text: String, title: String, url: String? = nil) -> ParseReport {
+    func importNodes(from text: String, title: String, url: String? = nil) throws -> ParseReport {
         let report = SubscriptionParser.parse(text)
-        var merged = nodes
-        for node in report.nodes where !merged.contains(where: { $0.id == node.id }) {
-            merged.append(node)
+        var merged = url == nil ? nodes : nodes.filter { $0.sourceURL != url }
+        for node in report.nodes {
+            var stamped = node
+            stamped.sourceURL = url
+            if !merged.contains(where: { $0.id == stamped.id }) { merged.append(stamped) }
         }
-        nodes = merged.sorted { $0.host < $1.host }
-        let meta = SubscriptionMeta(id: UUID(), title: title, url: url, addedAt: .now,
-                                   nodeCount: report.nodes.count, rejectedCount: report.rejected.count)
-        subscriptions.append(meta)
-        lastStatus = "新增 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
-        persist()
+
+        var metas = subscriptions
+        if let url {
+            let index = metas.firstIndex(where: { $0.url == url })
+            let meta = SubscriptionMeta(id: index.map { metas[$0].id } ?? UUID(), title: title, url: url,
+                                        addedAt: .now, nodeCount: report.nodes.count,
+                                        rejectedCount: report.rejected.count)
+            if let index { metas[index] = meta } else { metas.append(meta) }
+        }
+
+        let sorted = merged.sorted { $0.host < $1.host }
+        try write(nodes: sorted, subscriptions: metas)
+        nodes = sorted
+        subscriptions = metas
+        lastStatus = "解析 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
         return report
     }
 
-    func removeNode(_ node: Node) {
-        nodes.removeAll { $0.id == node.id }
-        persist()
+    func removeNode(_ node: Node) throws {
+        let remaining = nodes.filter { $0.id != node.id }
+        try write(nodes: remaining, subscriptions: subscriptions)
+        nodes = remaining
     }
 
-    func removeAll() {
+    func removeAll() throws {
         subscriptionGeneration = UUID()
+        try write(nodes: [], subscriptions: [])
         nodes = []
         subscriptions = []
         lastStatus = "已清空"
-        persist()
     }
 
-    func updateVPNSettings(_ settings: IKEv2TunnelSettings) {
+    func updateVPNSettings(_ settings: IKEv2TunnelSettings) throws {
+        try write(nodes: nodes, subscriptions: subscriptions, vpn: settings)
         vpnSettings = settings
-        persist()
     }
 
     /// 生成 .mobileconfig 落到 App Group 目录，供系统分享面板交给“设置”安装。
     /// 注意：勾选“写入凭据”时导出的文件含明文密码，分享完成后应删除副本。
     func exportProfile(_ settings: IKEv2TunnelSettings) throws -> URL {
-        updateVPNSettings(settings)
+        try updateVPNSettings(settings)
         let data = try IKEv2ProfileBuilder.mobileconfig(settings)
         try FileManager.default.createDirectory(at: profilesDirectory, withIntermediateDirectories: true)
         let url = profilesDirectory.appendingPathComponent(IKEv2ProfileBuilder.suggestedFileName(settings))
@@ -147,11 +161,12 @@ final class ConfigStore {
         lastStatus = "已删除 \(url.lastPathComponent)"
     }
 
-    private func persist() {
+    private func write(nodes newNode: [Node], subscriptions newSubscriptions: [SubscriptionMeta],
+                       vpn settings: IKEv2TunnelSettings? = nil) throws {
         var snapshot = Snapshot()
-        snapshot.nodes = nodes
-        snapshot.subscriptions = subscriptions
-        snapshot.vpn = vpnSettings
+        snapshot.nodes = newNode
+        snapshot.subscriptions = newSubscriptions
+        snapshot.vpn = settings ?? vpnSettings
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
@@ -159,6 +174,7 @@ final class ConfigStore {
             try data.write(to: storeURL, options: [.atomic, .completeFileProtection])
         } catch {
             lastStatus = "写入失败：\((error as NSError).domain) \((error as NSError).code)"
+            throw error
         }
     }
 }

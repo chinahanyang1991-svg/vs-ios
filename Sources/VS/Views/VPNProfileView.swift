@@ -120,7 +120,10 @@ struct VPNProfileView: View {
                 syncFromStore()
                 reloadProfiles()
             }
-            .onDisappear { store.updateVPNSettings(settings) }
+            .onDisappear {
+                do { try store.updateVPNSettings(settings) }
+                catch { errorMessage = "表单未能保存到本地文件，下次进入会回到旧值" }
+            }
             .onChange(of: settings) { _, _ in exportedURL = nil }
         }
     }
@@ -130,7 +133,8 @@ struct VPNProfileView: View {
             Label("点“生成描述文件”，再用分享面板选“存储到文件”。", systemImage: "1.circle")
             Label("iPhone 上打开该 .mobileconfig，右上角允许下载配置描述文件。", systemImage: "2.circle")
             Label("设置 → 通用 → VPN 与设备管理 → 安装，然后在“设置 → VPN”里连接。", systemImage: "3.circle")
-            Label("VS 不劫持系统网络，走的是 iOS 自带的 IKEv2 通道，因此不需要付费开发者账号。", systemImage: "checkmark.seal")
+            Label("描述文件本身不需要开发者账号：走的是 iOS 自带的 IKEv2 通道，VS 不劫持系统网络。"
+                  + "但 VS 这个 App 怎么免费装进手机仍未验证，那是另一件事。", systemImage: "checkmark.seal")
         }
         .font(.callout)
         .foregroundStyle(.secondary)

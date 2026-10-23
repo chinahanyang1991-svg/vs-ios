@@ -160,16 +160,15 @@ enum IKEv2ProfileBuilder {
             ikev2["AuthenticationMethod"] = "None"
             ikev2["ExtendedAuthEnabled"] = 1
             ikev2["AuthName"] = user
-            if settings.embedSecrets {
-                let pass = trimmed(settings.password)
-                if !pass.isEmpty { ikev2["AuthPassword"] = pass }
+            if settings.embedSecrets, !isBlank(settings.password) {
+                // 秘密原样写入：首尾空格是合法密码字符，裁掉就连不上服务端
+                ikev2["AuthPassword"] = settings.password
             }
         case .psk:
-            let secret = trimmed(settings.sharedSecret)
-            guard !secret.isEmpty else { throw IKEv2ProfileError.missingSecret(.psk) }
+            guard !isBlank(settings.sharedSecret) else { throw IKEv2ProfileError.missingSecret(.psk) }
             guard settings.embedSecrets else { throw IKEv2ProfileError.pskRequiresEmbedding }
             ikev2["AuthenticationMethod"] = "SharedSecret"
-            ikev2["SharedSecret"] = secret
+            ikev2["SharedSecret"] = settings.sharedSecret
         }
 
         let commonName = trimmed(settings.serverCommonName)
@@ -246,7 +245,7 @@ enum IKEv2ProfileBuilder {
         lines.append("认证：\(settings.authMode.displayName)")
         if settings.authMode == .eap {
             lines.append("用户名：\(trimmed(settings.username))")
-            lines.append("密码：\(settings.embedSecrets && !trimmed(settings.password).isEmpty ? "已写入描述文件" : "连接时手动输入")")
+            lines.append("密码：\(settings.embedSecrets && !isBlank(settings.password) ? "已写入描述文件" : "连接时手动输入")")
         } else {
             lines.append("共享密钥：已写入描述文件")
         }
@@ -259,6 +258,10 @@ enum IKEv2ProfileBuilder {
 
     private static func trimmed(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isBlank(_ text: String) -> Bool {
+        trimmed(text).isEmpty
     }
 
     private static func isAllowedLabelCharacter(_ character: Character) -> Bool {

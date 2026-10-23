@@ -24,7 +24,8 @@ struct Node: Identifiable, Codable, Hashable {
     var credential: String?
     var method: String?
     var parameters: [String: String]
-    var rawURL: String
+    /// 该节点来自哪个订阅地址；手动粘贴为 nil。刷新时按它整批替换。
+    var sourceURL: String? = nil
 
     var id: String { "\(kind.rawValue)|\(host)|\(port)|\(name)" }
 

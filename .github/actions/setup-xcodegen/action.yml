@@ -1,0 +1,35 @@
+name: Install pinned XcodeGen
+description: 按固定版本与哈希安装 XcodeGen，避免“生成工程”这一步随 Homebrew 漂移
+inputs:
+  version:
+    description: 要固定的 XcodeGen 版本号
+    required: false
+    default: 2.46.0
+  sha256:
+    description: 该版本 xcodegen.zip 的 sha256，取自 GitHub Releases API 的 digest 字段
+    required: false
+    default: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+runs:
+  using: composite
+  steps:
+    - name: Download, verify and install
+      shell: bash
+      run: |
+        set -euo pipefail
+        ZIP="$RUNNER_TEMP/xcodegen-$INPUT_VERSION.zip"
+        curl -fsSL -o "$ZIP" "https://github.com/yonaskolb/XcodeGen/releases/download/$INPUT_VERSION/xcodegen.zip"
+        printf '%s  %s\n' "$INPUT_SHA256" "$ZIP" | shasum -a 256 -c -
+        unzip -q "$ZIP" -d "$RUNNER_TEMP/xcodegen-$INPUT_VERSION"
+        PREFIX="$RUNNER_TEMP/xcodegen-prefix"
+        mkdir -p "$PREFIX"
+        bash "$RUNNER_TEMP/xcodegen-$INPUT_VERSION/xcodegen/install.sh" "$PREFIX"
+        echo "$PREFIX/bin" >> "$GITHUB_PATH"
+        OUT="$(xcodegen --version)"
+        echo "$OUT"
+        case "$OUT" in
+          *"$INPUT_VERSION"*) ;;
+          *) echo "XcodeGen 版本不是 $INPUT_VERSION，拒绝用其他版本继续生成工程"; exit 1 ;;
+        esac
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_SHA256: ${{ inputs.sha256 }}

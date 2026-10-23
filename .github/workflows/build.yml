@@ -21,8 +21,8 @@ jobs:
         run: |
           xcodebuild -version
           xcrun simctl list runtimes
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install pinned XcodeGen
+        uses: ./.github/actions/setup-xcodegen
       - name: Generate project
         run: xcodegen generate
       - name: Unit tests on simulator
@@ -64,8 +64,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install pinned XcodeGen
+        uses: ./.github/actions/setup-xcodegen
       - name: Generate project
         run: xcodegen generate
       - name: Build unsigned device app

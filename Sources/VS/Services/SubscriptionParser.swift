@@ -2,6 +2,10 @@ import Foundation
 
 struct ParseError: Error {
     var message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
 }
 
 enum SubscriptionParser {
@@ -72,7 +76,7 @@ enum SubscriptionParser {
         if queryText.hasPrefix("?") { queryText.removeFirst() }
 
         let (host, port) = try parseHostPort(hostPortText)
-        guard let credential = credential.removingPercentEncodingIfPresent(), !credential.isEmpty else {
+        guard let credential = credentialPart.removingPercentEncodingIfPresent(), !credential.isEmpty else {
             throw ParseError("认证信息为空")
         }
         let parameters = parseQuery(queryText)
@@ -133,7 +137,7 @@ enum SubscriptionParser {
         let (body, remark) = splitFragment(rest)
         guard let jsonText = body.base64URLDecodedToString(),
               let data = jsonText.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
             throw ParseError("VMess 链接的 base64 不是合法 JSON")
         }
         guard let host = (object["add"] as? String)?.trimmingCharacters(in: .whitespaces), !host.isEmpty else {

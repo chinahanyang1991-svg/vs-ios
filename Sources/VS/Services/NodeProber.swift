@@ -21,10 +21,13 @@ struct NodeProber {
     var timeout: TimeInterval = 3
 
     func probe(_ node: Node) async -> ProbeOutcome {
-        await withCheckedContinuation { continuation in
+        guard let port = NWEndpoint.Port(String(node.port)) else {
+            return .failed("端口无效")
+        }
+        return await withCheckedContinuation { continuation in
             let resumed = OnceBox()
             let started = Date.now
-            let connection = NWConnection(host: node.host, port: UInt16(node.port), using: .tcp)
+            let connection = NWConnection(host: NWEndpoint.Host(node.host), port: port, using: .tcp)
 
             connection.stateUpdateHandler = { state in
                 switch state {

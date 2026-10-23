@@ -58,6 +58,48 @@ final class VSUITests: XCTestCase {
     }
 
     @MainActor
+    func testEditNodeNameFromListAndSurvivesRelaunch() throws {
+        let app = launchApp()
+        app.tabBars.buttons["订阅"].tap()
+        let clear = app.buttons["清空全部节点与记录"]
+        if clear.isEnabled { clear.tap() }
+        app.tabBars.buttons["节点"].tap()
+        UIPasteboard.general.string = "vless://demo@public.example:443?path=/a#UI-Test"
+        app.buttons["粘贴链接"].tap()
+        let paste = app.buttons["粘贴剪贴板内容"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 5))
+        paste.tap()
+        dismissPastePermissionIfNeeded()
+        app.navigationBars["导入"].buttons["导入"].tap()
+        app.navigationBars["导入"].buttons["关闭"].tap()
+        let cell = app.cells.firstMatch
+        XCTAssertTrue(app.staticTexts["UI-Test"].waitForExistence(timeout: 5), "导入后列表里要有这条节点")
+        XCTAssertTrue(cell.exists)
+
+        cell.swipeLeft()
+        let edit = app.buttons["编辑"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "左滑必须露出“编辑”，否则名字打错只能删了重贴")
+        edit.tap()
+        let nameField = app.textFields["名称"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5), "点“编辑”必须打开面板并带出当前名称")
+        XCTAssertEqual(nameField.value as? String, "UI-Test", "面板初始值必须是这个节点的当前名字")
+        replace(nameField, with: "UI-Edited")
+        attachScreenshot(app, name: "编辑面板")
+        app.buttons["保存"].tap()
+
+        XCTAssertTrue(app.staticTexts["UI-Edited"].waitForExistence(timeout: 5), "保存后列表要立刻反映新名字")
+        XCTAssertFalse(app.staticTexts["UI-Test"].exists, "旧名字不能还留在列表里")
+        XCTAssertTrue(app.staticTexts["public.example:443"].exists, "只改名不该动主机与端口")
+        attachScreenshot(app, name: "改名后的列表")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["UI-Edited"].waitForExistence(timeout: 5),
+                      "改名必须落盘，重启后不能回到旧名字")
+        app.terminate()
+    }
+
+    @MainActor
     func testProfileValidationExportAndDelete() throws {
         let app = launchApp()
         app.tabBars.buttons["VPN"].tap()

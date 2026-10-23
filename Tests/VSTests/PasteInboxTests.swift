@@ -1,4 +1,5 @@
 import XCTest
+@testable import VS
 
 final class PasteInboxTests: XCTestCase {
     func testMissingClipboardContentIsReportedUnavailable() {

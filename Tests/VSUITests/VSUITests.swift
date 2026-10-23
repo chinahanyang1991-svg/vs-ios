@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 final class VSUITests: XCTestCase {
@@ -9,13 +10,15 @@ final class VSUITests: XCTestCase {
         if clear.isEnabled { clear.tap() }
         app.tabBars.buttons["节点"].tap()
         XCTAssertTrue(app.staticTexts["还没有节点"].waitForExistence(timeout: 5))
+        let link = "vless://demo@public.example:443?path=/a@127.0.0.1:22#UI-Test"
+        UIPasteboard.general.string = link
         app.buttons["粘贴链接"].tap()
         let editor = app.textViews.firstMatch
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
-        editor.tap()
-        let link = "vless://demo@public.example:443?path=/a@127.0.0.1:22#UI-Test"
-        editor.typeText(link)
-        XCTAssertEqual(editor.value as? String, link)
+        let paste = app.buttons["粘贴剪贴板内容"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), "导入页要有真正可用的剪贴板入口")
+        paste.tap()
+        XCTAssertEqual(editor.value as? String, link, "剪贴板内容必须原样进入输入框")
         attachScreenshot(app, name: "节点原始输入")
         app.navigationBars["导入"].buttons["导入"].tap()
         XCTAssertEqual(editor.value as? String, link)

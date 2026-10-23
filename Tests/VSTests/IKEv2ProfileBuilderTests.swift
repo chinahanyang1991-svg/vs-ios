@@ -211,7 +211,7 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
             })
         }
         await fulfillment(of: [started], timeout: 3)
-        store.removeAll()
+        try store.removeAll()
         response?.resume(returning: "trojan://fake@public.example:443#Test")
         do {
             _ = try await request.value
@@ -227,7 +227,7 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
     @MainActor
     func testSubscriptionAfterClearCanStillImport() async throws {
         let store = makeStore()
-        store.removeAll()
+        try store.removeAll()
         let url = try XCTUnwrap(URL(string: "https://subscription.example/test"))
         let report = try await store.fetchSubscription(url: url, title: "测试", fetch: { _ in
             "trojan://fake@public.example:443#Test"
@@ -307,6 +307,7 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
         XCTAssertThrowsError(try store.importNodes(from: "trojan://p@one.example:443#n", title: "t"))
         XCTAssertFalse(store.lastStatus.hasPrefix("新增"), "写盘失败不能报告“新增 N 个”")
+        XCTAssertTrue(store.nodes.isEmpty, "写盘失败时内存不得留下未落盘的节点，重启后不能凭空出现")
     }
 
     func testCorruptFileReloadDoesNotClaimBackup() throws {

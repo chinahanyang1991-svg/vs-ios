@@ -108,8 +108,14 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         XCTAssertThrowsError(try IKEv2ProfileBuilder.vpnPayload(badDNS))
 
         var badCN = eapSettings()
-        badCN.serverCommonName = "a b"
+        badCN.serverCommonName = "Example\u{0000}VPN CA"
         XCTAssertThrowsError(try IKEv2ProfileBuilder.vpnPayload(badCN))
+
+        var spacedCN = eapSettings()
+        spacedCN.serverCommonName = "  Example, Inc. VPN CA  "
+        let payload = try IKEv2ProfileBuilder.vpnPayload(spacedCN)
+        let ikev2 = payload["IKEv2"] as! [String: Any]
+        XCTAssertEqual(ikev2["ServerCertificateIssuerCommonName"] as? String, "Example, Inc. VPN CA")
     }
 
     func testPersistedSettingsNeverContainSecrets() throws {

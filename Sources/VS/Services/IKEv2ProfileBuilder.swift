@@ -174,7 +174,9 @@ enum IKEv2ProfileBuilder {
 
         let commonName = trimmed(settings.serverCommonName)
         if !commonName.isEmpty {
-            guard commonName.allSatisfy({ !$0.isNewline && !$0.isWhitespace }) else {
+            // CN 允许空格与逗号（“Example, Inc. VPN CA”），但控制字符会破坏 plist 文本
+            let hasControlCharacter = commonName.unicodeScalars.contains { $0.value < 0x20 || $0.value == 0x7F }
+            guard !hasControlCharacter else {
                 throw IKEv2ProfileError.invalidCommonName(commonName)
             }
             ikev2["ServerCertificateIssuerCommonName"] = commonName

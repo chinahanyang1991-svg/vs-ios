@@ -63,6 +63,8 @@ struct NodeListView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions {
+                            Button("编辑") { editingNode = node }
+                                .tint(.blue)
                             Button("删除", role: .destructive) {
                                 do {
                                     try store.removeNode(node)

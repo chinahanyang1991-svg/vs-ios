@@ -102,6 +102,14 @@ final class ConfigStore {
         nodes = remaining
     }
 
+    // 红轮占位：故意什么都不做，用来取真实断言读数，G 轮立即替换成实现。
+    func removeSubscription(_ subscription: SubscriptionMeta) throws {
+    }
+
+    func nodeCount(forSourceURL url: String?) -> Int {
+        subscriptions.first(where: { $0.url == url })?.nodeCount ?? 0
+    }
+
     func removeAll() throws {
         subscriptionGeneration = UUID()
         try write(nodes: [], subscriptions: [])

@@ -132,6 +132,33 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(makeStore().nodes, [original], "非法输入不能污染磁盘")
     }
 
+    func testUpdateNodeRejectsEmptiedCredential() throws {
+        let store = makeStore()
+        _ = try store.importNodes(from: "trojan://p1@one.example:443#one\nvless://uuid-1234@two.example:443#two",
+                                  title: "A", url: "https://feed.example/a")
+        let trojan = try XCTUnwrap(store.nodes.first(where: { $0.host == "one.example" }))
+        let vless = try XCTUnwrap(store.nodes.first(where: { $0.host == "two.example" }))
+
+        for blank in [nil, "", "   "] as [String?] {
+            var wiped = trojan
+            wiped.credential = blank
+            XCTAssertThrowsError(try store.updateNode(id: trojan.id, to: wiped),
+                                 "Trojan 没有密码就是一条连不上的死节点，清空必须报错而不是静默落盘")
+
+            var wipedVless = vless
+            wipedVless.credential = blank
+            XCTAssertThrowsError(try store.updateNode(id: vless.id, to: wipedVless),
+                                 "VLESS 的 UUID 等同凭据，清空后节点同样不可用")
+        }
+
+        for pair in [(store.nodes, "内存"), (makeStore().nodes, "磁盘")] {
+            XCTAssertEqual(pair.0.first(where: { $0.host == "one.example" })?.credential, "p1",
+                           "非法的凭据清空不能污染\(pair.1)")
+            XCTAssertEqual(pair.0.first(where: { $0.host == "two.example" })?.credential, "uuid-1234",
+                           "非法的凭据清空不能污染\(pair.1)")
+        }
+    }
+
     func testUpdateNodeRejectsCollisionWithExistingNode() throws {
         let store = makeStore()
         _ = try store.importNodes(from: "trojan://p1@one.example:443#one\ntrojan://p2@two.example:443#two",

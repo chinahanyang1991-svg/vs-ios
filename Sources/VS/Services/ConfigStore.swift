@@ -132,10 +132,16 @@ final class ConfigStore {
         guard (1...65535).contains(updated.port) else {
             throw ConfigStoreError.invalidNode("端口需在 1…65535 之间，当前填的是 \(updated.port)")
         }
+        // 四种协议的凭据都是必需的，与 SubscriptionParser 拒绝空凭据的口径保持一致。
+        let credential = (updated.credential ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !credential.isEmpty else {
+            throw ConfigStoreError.invalidNode("\(updated.kind.displayName) 节点必须有 UUID 或密码，清空后这条节点无法连接")
+        }
 
         var candidate = updated
         candidate.name = name
         candidate.host = host
+        candidate.credential = credential
         candidate.sourceURL = nodes[index].sourceURL
         let clashes = nodes.indices.contains { $0 != index && nodes[$0].id == candidate.id }
         guard !clashes else { throw ConfigStoreError.duplicateNode }

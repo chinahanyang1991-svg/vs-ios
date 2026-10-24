@@ -33,28 +33,50 @@ jobs:
             echo "缺少可用的 iOS 18 模拟器，拒绝使用其他系统版本替代"
             exit 1
           fi
+          echo "SIM_DEST=$DEST" >> "$GITHUB_ENV"
           echo "使用 iOS 18 模拟器：$DEST"
           xcodebuild test \
             -project VS.xcodeproj \
             -scheme VS \
+            -only-testing:VSTests \
             -destination "platform=iOS Simulator,id=$DEST" \
             -derivedDataPath DerivedData \
-            -resultBundlePath TestResults.xcresult \
+            -resultBundlePath UnitResults.xcresult \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee test.log
+            2>&1 | tee unit.log
+      - name: Restart simulator so UI tests cannot attach to a leftover unit host
+        run: |
+          set -euo pipefail
+          xcrun simctl shutdown "$SIM_DEST" || true
+          xcrun simctl boot "$SIM_DEST"
+          xcrun simctl bootstatus "$SIM_DEST" -b
+      - name: UI tests on simulator
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project VS.xcodeproj \
+            -scheme VS \
+            -only-testing:VSUITests \
+            -destination "platform=iOS Simulator,id=$SIM_DEST" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath UIResults.xcresult \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee ui.log
       - name: Export UI evidence
         if: always()
         run: |
-          if test -d TestResults.xcresult; then
-            xcrun xcresulttool export attachments --path TestResults.xcresult --output-path ui-evidence
+          if test -d UIResults.xcresult; then
+            xcrun xcresulttool export attachments --path UIResults.xcresult --output-path ui-evidence
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: test-log
           path: |
-            test.log
+            unit.log
+            ui.log
             ui-evidence
 
   device-build:

@@ -111,6 +111,9 @@ final class ConfigStore {
 
     /// 读不到时界面要能问到一个状态；这句话同时进 lastStatus，两处不许各说一套。
     static let unreadableReason = "本地配置无法读取，原文件保持未改动"
+    /// 路径明明存在却读不动（被目录堵住、保护异常）不能跟「还没有配置文件」混为一谈：
+    /// 说成后者，用户下一次导入就会把旧件当成空白直接覆盖掉。
+    static let readFailureReason = "本地配置文件读取失败，原文件保持未改动"
     private(set) var loadFailure: String?
 
     /// 恢复入口只做一件事：把解不开的那个文件拿走，不写任何字节。
@@ -147,8 +150,16 @@ final class ConfigStore {
     }
 
     func reload() {
-        guard let data = try? Data(contentsOf: storeURL) else {
+        guard FileManager.default.fileExists(atPath: storeURL.path) else {
             loadFailure = nil
+            return
+        }
+        let data: Data
+        do {
+            data = try Data(contentsOf: storeURL)
+        } catch {
+            loadFailure = Self.readFailureReason
+            lastStatus = Self.readFailureReason
             return
         }
         guard let snapshot = ConfigStore.decode(data, with: cipher) else {
@@ -286,13 +297,20 @@ final class ConfigStore {
 
     /// 生成 .mobileconfig 落到 App Group 目录，供系统分享面板交给“设置”安装。
     /// 注意：勾选“写入凭据”时导出的文件含明文密码，分享完成后应删除副本。
+    /// 导出本身不需要钥匙串也不需要旧配置——把「保存到本地」这道门放在前面，
+    /// 就等于本机密钥一拿不到，用户连唯一的隧道手段都做不出来。
     func exportProfile(_ settings: IKEv2TunnelSettings) throws -> URL {
-        try updateVPNSettings(settings)
         let data = try IKEv2ProfileBuilder.mobileconfig(settings)
         try FileManager.default.createDirectory(at: profilesDirectory, withIntermediateDirectories: true)
         let url = profilesDirectory.appendingPathComponent(IKEv2ProfileBuilder.suggestedFileName(settings))
         try data.write(to: url, options: [.atomic, .completeFileProtection])
-        lastStatus = "已生成描述文件 \(url.lastPathComponent)"
+        vpnSettings = settings
+        do {
+            try write(nodes: nodes, subscriptions: subscriptions, vpn: settings)
+            lastStatus = "已生成描述文件 \(url.lastPathComponent)"
+        } catch {
+            lastStatus = "已生成描述文件 \(url.lastPathComponent)，但表单未能保存到本机文件：\(Self.describe(error))"
+        }
         return url
     }
 

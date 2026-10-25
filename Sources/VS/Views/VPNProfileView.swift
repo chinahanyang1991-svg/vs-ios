@@ -5,6 +5,7 @@ struct VPNProfileView: View {
     @State private var settings = IKEv2TunnelSettings()
     @State private var exportedURL: URL?
     @State private var errorMessage: String?
+    @State private var statusNote: String?
     @State private var profiles: [URL] = []
     @State private var profilesError: String?
 
@@ -68,6 +69,12 @@ struct VPNProfileView: View {
                             .font(.callout)
                             .foregroundStyle(.orange)
                     }
+                    // 「生成成了」和「没能存到本机」是两件事，一屏里都要说，不能只说其中一半。
+                    if let statusNote {
+                        Text(statusNote)
+                            .font(.callout)
+                            .foregroundStyle(statusNote.contains("未能保存") ? Color.orange : Color.secondary)
+                    }
                     if !settings.serverHost.isEmpty {
                         Text(IKEv2ProfileBuilder.sanitizedSummary(settings))
                             .font(.callout)
@@ -124,7 +131,10 @@ struct VPNProfileView: View {
                 do { try store.updateVPNSettings(settings) }
                 catch { errorMessage = "表单未能保存到本地文件，下次进入会回到旧值" }
             }
-            .onChange(of: settings) { _, _ in exportedURL = nil }
+            .onChange(of: settings) { _, _ in
+                exportedURL = nil
+                statusNote = nil
+            }
         }
     }
 
@@ -149,8 +159,10 @@ struct VPNProfileView: View {
 
     private func generate() {
         errorMessage = nil
+        statusNote = nil
         do {
             exportedURL = try store.exportProfile(settings)
+            statusNote = store.lastStatus
             reloadProfiles()
         } catch {
             errorMessage = error.localizedDescription
@@ -159,6 +171,7 @@ struct VPNProfileView: View {
 
     private func deleteProfile(_ url: URL) {
         errorMessage = nil
+        statusNote = nil
         do {
             try store.deleteExportedProfile(url)
             if exportedURL == url { exportedURL = nil }

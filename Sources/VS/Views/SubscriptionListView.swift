@@ -121,6 +121,7 @@ struct SubscriptionListView: View {
 }
 
 struct AboutView: View {
+    @Environment(ConfigStore.self) private var store
     private let signature = SignatureStatusReader.status()
 
     private var versionText: String {
@@ -161,7 +162,12 @@ struct AboutView: View {
                 }
             }
             Section("数据存储") {
+                LabeledContent("配置文件", value: store.storageReport.fileName)
+                LabeledContent("所在目录", value: store.storageReport.containerPath)
                 LabeledContent("App Group", value: ConfigStore.appGroupIdentifier)
+                Text(store.storageReport.cipherLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text("节点、订阅记录只写在本机容器里，不上传任何服务器。")
                     .font(.caption)
                     .foregroundStyle(.secondary)

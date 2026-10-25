@@ -87,13 +87,23 @@ final class ConfigStore {
         }
     }
 
+    var storageReport: StorageReport {
+        Self.storageReport(storeURL: storeURL, cipher: cipher, keyFailure: keyFailure)
+    }
+
     private static func describe(_ error: Error) -> String {
         if let keychain = error as? ConfigKeyError { return keychain.shortReason }
         return (error as? LocalizedError)?.errorDescription ?? "\(error)"
     }
 
     static func storageReport(storeURL: URL, cipher: ConfigCipher?, keyFailure: String?) -> StorageReport {
-        StorageReport(fileName: "待定", containerPath: "待定", cipherLabel: "待定")
+        StorageReport(
+            fileName: storeURL.lastPathComponent,
+            containerPath: storeURL.deletingLastPathComponent().path,
+            cipherLabel: cipher != nil
+                ? "AES-GCM 信封，密钥只在本机钥匙串（不随备份同步）"
+                : "未启用加密：本机加密密钥不可用，配置未写入任何字节（\(keyFailure ?? "调用方没给密钥，本机钥匙串也没读到")）"
+        )
     }
 
     @MainActor

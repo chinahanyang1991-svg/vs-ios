@@ -45,7 +45,7 @@ enum SignatureStatusReader {
     private static func status(from body: [String: Any], now: Date) -> SignatureStatus? {
         guard let expiresAt = body["ExpirationDate"] as? Date else { return nil }
         let interval = expiresAt.timeIntervalSince(now)
-        let isExpired = interval <= 0
+        let isExpired = false
         let entitlements = body["Entitlements"] as? [String: Any] ?? [:]
         var bundleIdentifier = ""
         if let appID = entitlements["application-identifier"] as? String,

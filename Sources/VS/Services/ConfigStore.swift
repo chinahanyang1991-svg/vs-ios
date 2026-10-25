@@ -116,11 +116,16 @@ final class ConfigStore {
     static let readFailureReason = "本地配置文件读取失败，原文件保持未改动"
     private(set) var loadFailure: String?
 
-    // R15 占位：只为让新判据能编译、断言真红。真实实现要落在 write() 成功尾部与 exportProfile 的 catch 里。
+    /// 内存里的表单值与盘上的值是否一致。导出可以成功而持久化可以失败，
+    /// 那一刻用户看到的新值只活在本机内存里——界面必须问得出这一态。
     private(set) var vpnSettingsSavedOnDisk = true
 
+    /// 两种失败的后果不同，不许共用一句：没落盘 ⇒ 新值只撑到本次会话；
+    /// 落盘失败且内存未更新 ⇒ 下次进页面就是旧值。
     static func vpnPersistenceHint(savedOnDisk: Bool) -> String {
-        "表单未能保存到本地文件，下次进入会回到旧值"
+        savedOnDisk
+            ? "表单未能保存到本地文件，下次进入会回到旧值"
+            : "表单未能保存到本机文件里——本机文件里还是旧值，这次填的只在这次运行里有效，退出 App 后同样回到旧值"
     }
 
     /// 恢复入口只做一件事：把解不开的那个文件拿走，不写任何字节。
@@ -316,6 +321,7 @@ final class ConfigStore {
             try write(nodes: nodes, subscriptions: subscriptions, vpn: settings)
             lastStatus = "已生成描述文件 \(url.lastPathComponent)"
         } catch {
+            vpnSettingsSavedOnDisk = false
             lastStatus = "已生成描述文件 \(url.lastPathComponent)，但表单未能保存到本机文件：\(Self.describe(error))"
         }
         return url
@@ -374,5 +380,8 @@ final class ConfigStore {
                 + "\((error as NSError).localizedDescription)"
             throw error
         }
+        // 快照里的 vpn 段取的就是当前内存值（或被调用方原样递回来的那份），
+        // 所以只要字节真落到盘上，两边就重新对齐了——失败路径在上面已 throw，走不到这里。
+        vpnSettingsSavedOnDisk = true
     }
 }

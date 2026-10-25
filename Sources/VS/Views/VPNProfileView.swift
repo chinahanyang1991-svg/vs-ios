@@ -129,7 +129,7 @@ struct VPNProfileView: View {
             }
             .onDisappear {
                 do { try store.updateVPNSettings(settings) }
-                catch { errorMessage = "表单未能保存到本地文件，下次进入会回到旧值" }
+                catch { errorMessage = ConfigStore.vpnPersistenceHint(savedOnDisk: store.vpnSettingsSavedOnDisk) }
             }
             .onChange(of: settings) { _, _ in
                 exportedURL = nil

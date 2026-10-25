@@ -25,6 +25,25 @@ jobs:
         uses: ./.github/actions/setup-xcodegen
       - name: Generate project
         run: xcodegen generate
+      - name: 写模拟器专用的签名 entitlements（CI 无描述文件，钥匙串要 application-identifier）
+        run: |
+          set -euo pipefail
+          mkdir -p Support
+          cat > Support/VS.simulator.entitlements <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array><string>group.com.vs.app</string></array>
+            <key>com.apple.application-identifier</key>
+            <string>com.vs.app</string>
+            <key>keychain-access-groups</key>
+            <array><string>com.vs.app</string></array>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint Support/VS.simulator.entitlements
       - name: Unit tests on simulator
         id: unit
         continue-on-error: true
@@ -45,7 +64,11 @@ jobs:
             -derivedDataPath DerivedData \
             -resultBundlePath UnitResults.xcresult \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_ENTITLEMENTS=Support/VS.simulator.entitlements \
             2>&1 | tee unit.log
       - name: Restart simulator so UI tests cannot attach to a leftover unit host
         id: restart
@@ -69,7 +92,11 @@ jobs:
             -derivedDataPath DerivedData \
             -resultBundlePath UIResults.xcresult \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_ENTITLEMENTS=Support/VS.simulator.entitlements \
             2>&1 | tee ui.log
       - name: 两套 Suite 都要绿，红的也照样取回两份日志
         if: always()

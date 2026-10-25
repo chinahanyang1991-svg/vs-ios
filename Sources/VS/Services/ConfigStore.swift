@@ -14,7 +14,7 @@ enum ConfigStoreError: LocalizedError {
     case unknownNode
     case invalidNode(String)
     case duplicateNode
-    case encryptionUnavailable
+    case encryptionUnavailable(String)
 
     var errorDescription: String? {
         switch self {
@@ -26,8 +26,8 @@ enum ConfigStoreError: LocalizedError {
             return "编辑未生效：\(reason)"
         case .duplicateNode:
             return "已经有完全相同的节点，未合并或丢弃任何一条"
-        case .encryptionUnavailable:
-            return "本机加密密钥不可用，配置未写入任何字节"
+        case .encryptionUnavailable(let reason):
+            return "本机加密密钥不可用，配置未写入任何字节（\(reason)）"
         }
     }
 }
@@ -52,17 +52,38 @@ final class ConfigStore {
     private var storeURL: URL
     private var subscriptionGeneration = UUID()
     private var cipher: ConfigCipher?
+    private var keyFailure: String?
 
     init(storeURL: URL? = nil, cipher: ConfigCipher? = nil) {
         self.storeURL = storeURL ?? ConfigStore.resolveStoreURL(fileName: fileName)
-        self.cipher = cipher ?? ConfigStore.productionCipher()
+        if let cipher {
+            self.cipher = cipher
+        } else {
+            let (loaded, failure) = ConfigStore.productionCipher()
+            self.cipher = loaded
+            self.keyFailure = failure
+        }
         reload()
     }
 
-    /// 不注入 cipher 的调用点（App 本体与既有测试）都走本机钥匙串；拿不到密钥时宁可写不下去，也不落明文。
-    private static func productionCipher() -> ConfigCipher? {
-        guard let key = try? ConfigKey.loadOrCreate() else { return nil }
-        return try? ConfigCipher(key: key)
+    /// 不注入 cipher 的调用点都走本机钥匙串；拿不到密钥时宁可写不下去，也不落明文。
+    /// 状态码必须跟着文案出来：g11 只留一句「不可用」，-34018 是被吞掉的。
+    private static func productionCipher() -> (ConfigCipher?, String?) {
+        do {
+            let key = try ConfigKey.loadOrCreate()
+            do {
+                return (try ConfigCipher(key: key), nil)
+            } catch {
+                return (nil, ConfigStore.describe(error))
+            }
+        } catch {
+            return (nil, ConfigStore.describe(error))
+        }
+    }
+
+    private static func describe(_ error: Error) -> String {
+        if let keychain = error as? ConfigKeyError { return keychain.shortReason }
+        return (error as? LocalizedError)?.errorDescription ?? "\(error)"
     }
 
     @MainActor
@@ -97,7 +118,12 @@ final class ConfigStore {
         lastStatus = "已载入 \(nodes.count) 个节点"
         // 旧的明文文件读通一次就立刻换成信封，之后盘上不再留任何明文字节。
         if cipher != nil, !ConfigCipher.looksEncrypted(data) {
-            try? write(nodes: nodes, subscriptions: subscriptions)
+            do {
+                try write(nodes: nodes, subscriptions: subscriptions)
+            } catch {
+                // 迁移没写成不等于读不到：节点确实在内存里，文案得把两件事分开说。
+                lastStatus = "已载入 \(nodes.count) 个节点，但未能换成加密信封：\(Self.describe(error))"
+            }
         }
     }
 
@@ -266,7 +292,9 @@ final class ConfigStore {
         snapshot.subscriptions = newSubscriptions
         snapshot.vpn = settings ?? vpnSettings
         do {
-            guard let cipher = cipher else { throw ConfigStoreError.encryptionUnavailable }
+            guard let cipher = cipher else {
+                throw ConfigStoreError.encryptionUnavailable(keyFailure ?? "调用方没给密钥，本机钥匙串也没读到")
+            }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             let data = try cipher.seal(encoder.encode(snapshot))

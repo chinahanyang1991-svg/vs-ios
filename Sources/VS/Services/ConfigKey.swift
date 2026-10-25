@@ -12,6 +12,13 @@ enum ConfigKeyError: LocalizedError {
             return "本机加密密钥不可用（钥匙串返回 \(status)），配置未写入任何字节"
         }
     }
+
+    /// 上层还要把这半句拼到自己的文案里，两句「不可用」叠在一起没人读得下去。
+    var shortReason: String {
+        switch self {
+        case .keychain(let status): return "钥匙串返回 \(status)"
+        }
+    }
 }
 
 enum ConfigKey {

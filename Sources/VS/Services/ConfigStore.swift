@@ -14,6 +14,7 @@ enum ConfigStoreError: LocalizedError {
     case unknownNode
     case invalidNode(String)
     case duplicateNode
+    case encryptionUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +26,8 @@ enum ConfigStoreError: LocalizedError {
             return "编辑未生效：\(reason)"
         case .duplicateNode:
             return "已经有完全相同的节点，未合并或丢弃任何一条"
+        case .encryptionUnavailable:
+            return "本机加密密钥不可用，配置未写入任何字节"
         }
     }
 }
@@ -52,8 +55,14 @@ final class ConfigStore {
 
     init(storeURL: URL? = nil, cipher: ConfigCipher? = nil) {
         self.storeURL = storeURL ?? ConfigStore.resolveStoreURL(fileName: fileName)
-        self.cipher = cipher
+        self.cipher = cipher ?? ConfigStore.productionCipher()
         reload()
+    }
+
+    /// 不注入 cipher 的调用点（App 本体与既有测试）都走本机钥匙串；拿不到密钥时宁可写不下去，也不落明文。
+    private static func productionCipher() -> ConfigCipher? {
+        guard let key = try? ConfigKey.loadOrCreate() else { return nil }
+        return try? ConfigCipher(key: key)
     }
 
     @MainActor
@@ -78,14 +87,29 @@ final class ConfigStore {
 
     func reload() {
         guard let data = try? Data(contentsOf: storeURL) else { return }
-        if let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
-            nodes = snapshot.nodes
-            subscriptions = snapshot.subscriptions
-            if let vpn = snapshot.vpn { vpnSettings = vpn }
-            lastStatus = "已载入 \(nodes.count) 个节点"
-        } else {
+        guard let snapshot = ConfigStore.decode(data, with: cipher) else {
             lastStatus = "本地配置无法读取，原文件保持未改动"
+            return
         }
+        nodes = snapshot.nodes
+        subscriptions = snapshot.subscriptions
+        if let vpn = snapshot.vpn { vpnSettings = vpn }
+        lastStatus = "已载入 \(nodes.count) 个节点"
+        // 旧的明文文件读通一次就立刻换成信封，之后盘上不再留任何明文字节。
+        if cipher != nil, !ConfigCipher.looksEncrypted(data) {
+            try? write(nodes: nodes, subscriptions: subscriptions)
+        }
+    }
+
+    private static func decode(_ data: Data, with cipher: ConfigCipher?) -> Snapshot? {
+        let plaintext: Data?
+        if ConfigCipher.looksEncrypted(data) {
+            plaintext = cipher.flatMap { try? $0.open(data) }
+        } else {
+            plaintext = data
+        }
+        guard let plaintext = plaintext else { return nil }
+        return try? JSONDecoder().decode(Snapshot.self, from: plaintext)
     }
 
     /// 导入。带 url 时按来源整批替换：该来源被服务端删掉的节点随刷新消失，
@@ -242,12 +266,14 @@ final class ConfigStore {
         snapshot.subscriptions = newSubscriptions
         snapshot.vpn = settings ?? vpnSettings
         do {
+            guard let cipher = cipher else { throw ConfigStoreError.encryptionUnavailable }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
-            let data = try encoder.encode(snapshot)
+            let data = try cipher.seal(encoder.encode(snapshot))
             try data.write(to: storeURL, options: [.atomic, .completeFileProtection])
         } catch {
-            lastStatus = "写入失败：\((error as NSError).domain) \((error as NSError).code)"
+            lastStatus = "写入失败：\((error as NSError).domain) \((error as NSError).code) "
+                + "\((error as NSError).localizedDescription)"
             throw error
         }
     }

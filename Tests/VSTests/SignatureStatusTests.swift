@@ -24,7 +24,7 @@ private func envelope(_ content: [UInt8]) -> [UInt8] {
 }
 
 private func binaryPlist(_ object: Any) -> Data {
-    try! PropertyListSerialization.data(fromJSONObject: object, options: 0, format: .binary)
+    try! PropertyListSerialization.data(fromPropertyList: object, format: .binary, options: 0)
 }
 
 private let udid = "00008030-001430213460402E"
@@ -58,7 +58,7 @@ final class SignatureStatusTests: XCTestCase {
 
     // ---------- the gate exists at all ----------
     func testGarbageEnvelopeReportsNoSignature() {
-        XCTAssertNil(SignatureStatusReader.parse(Data([UInt8](repeating: 0, count: 512))),
+        XCTAssertNil(SignatureStatusReader.parse(Data([UInt8](repeating: 0, count: 512)), now: now),
                      "random bytes must not be presented as a signing status")
     }
 
@@ -90,7 +90,7 @@ final class SignatureStatusTests: XCTestCase {
         XCTAssertEqual(status.teamName, "VS Personal")
         XCTAssertEqual(status.bundleIdentifier, "com.vs.app")
         XCTAssertTrue(status.isDevelopment)
-        XCTAssertEqual(status.deviceCount, 1)
+        XCTAssertEqual(status.deviceCount, .some(1))
         XCTAssertEqual(status.daysRemaining, 7)
         XCTAssertFalse(status.isExpired)
         XCTAssertEqual(status.expiresAt.timeIntervalSince(now), 7 * 86400, accuracy: 1)

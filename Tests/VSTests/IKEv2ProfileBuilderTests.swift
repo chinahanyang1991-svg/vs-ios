@@ -325,4 +325,27 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         XCTAssertFalse(store.lastStatus.contains("备份"), "代码里没有备份动作，就不能声称已备份")
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
     }
+
+    func testPSKSummaryDoesNotClaimAnUnembeddedSecretIsWritten() {
+        var s = IKEv2TunnelSettings()
+        s.serverHost = "192.0.2.10"
+        s.authMode = .psk
+        s.sharedSecret = "s3cr3t"
+        s.embedSecrets = false
+        let summary = IKEv2ProfileBuilder.sanitizedSummary(s)
+        XCTAssertFalse(summary.contains("已写入描述文件"),
+                       "没勾选「写入凭据」就不能说密钥已写进去：\(summary)")
+        XCTAssertTrue(summary.contains("未写入"),
+                      "要当场说清现在生成会被拒：\(summary)")
+    }
+
+    func testPSKSummaryStillReportsAnEmbeddedSecret() {
+        var s = IKEv2TunnelSettings()
+        s.serverHost = "192.0.2.10"
+        s.authMode = .psk
+        s.sharedSecret = "s3cr3t"
+        s.embedSecrets = true
+        XCTAssertTrue(IKEv2ProfileBuilder.sanitizedSummary(s).contains("已写入描述文件"),
+                      "勾选了写入凭据，预览就该照实说已写入")
+    }
 }

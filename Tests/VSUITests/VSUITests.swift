@@ -126,6 +126,11 @@ final class VSUITests: XCTestCase {
         generate.tap()
         let share = app.buttons["分享描述文件"]
         XCTAssertTrue(share.waitForExistence(timeout: 5))
+        // 生成成功这件事要在页面上有一行自己的话——它还得把「生成成功」和「没能保存」分开说，
+        // 因为导出被本地写失败挡死是这轮要修的那个洞。
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "已生成描述文件")).firstMatch.waitForExistence(timeout: 5),
+            "生成成功后页面上要有状态行，说清生成与保存各自的结果")
         let delete = app.buttons["删除描述文件 .UI-Test.mobileconfig"]
         reveal(delete, in: app)
         XCTAssertTrue(delete.exists)

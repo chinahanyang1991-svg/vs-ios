@@ -130,6 +130,21 @@ final class VSUITests: XCTestCase {
     }
 
     @MainActor
+    func testAboutPageReportsSigningStatusHonestly() throws {
+        // 云端 UI 测试跑的是模拟器包，里面没有 embedded.mobileprovision：
+        // 界面必须承认“读不到”，不能拿一个编出来的天数糊弄用户。
+        let app = launchApp()
+        app.tabBars.buttons["关于"].tap()
+        XCTAssertTrue(app.staticTexts["安装签名"].waitForExistence(timeout: 5), "关于页要有“安装签名”分区")
+        let notice = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "没有可读取的签名描述文件")).firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 5), "读不到描述文件时要直说读不到")
+        XCTAssertFalse(app.staticTexts["剩余有效天数"].exists, "没有描述文件就不能显示剩余天数")
+        XCTAssertFalse(app.staticTexts["到期时间"].exists, "没有描述文件就不能显示到期时间")
+        attachScreenshot(app, name: "关于-签名状态")
+    }
+
+    @MainActor
     private func launchApp() -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()

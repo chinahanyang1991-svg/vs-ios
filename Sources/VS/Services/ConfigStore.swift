@@ -48,9 +48,11 @@ final class ConfigStore {
     private let fileName = "vs-config.json"
     private var storeURL: URL
     private var subscriptionGeneration = UUID()
+    private var cipher: ConfigCipher?
 
-    init(storeURL: URL? = nil) {
+    init(storeURL: URL? = nil, cipher: ConfigCipher? = nil) {
         self.storeURL = storeURL ?? ConfigStore.resolveStoreURL(fileName: fileName)
+        self.cipher = cipher
         reload()
     }
 

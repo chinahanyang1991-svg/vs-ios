@@ -292,10 +292,12 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         let store = ConfigStore(storeURL: url)
         _ = try store.importNodes(from: "trojan://sup3rsecret@one.example:443#note", title: "t",
                                  url: "https://feed.example/suba")
-        let json = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+        let raw = try Data(contentsOf: url)
+        let json = String(decoding: raw, as: UTF8.self)
         XCTAssertFalse(json.contains("rawURL"), "整条原始链接是凭据的第二份副本，不得落盘")
         XCTAssertFalse(json.contains("trojan://sup3rsecret"))
-        XCTAssertTrue(json.contains("sup3rsecret"), "凭据仍需保留才能展示与测速；搬 Keychain 是另一步")
+        XCTAssertNil(raw.range(of: Data("sup3rsecret".utf8)),
+                     "整份配置都要加密，凭据不能再以明文躺在落盘字节里")
     }
 
     func testWriteFailurePropagatesInsteadOfClaimingSuccess() throws {

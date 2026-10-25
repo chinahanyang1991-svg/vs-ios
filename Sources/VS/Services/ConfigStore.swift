@@ -39,6 +39,12 @@ private struct Snapshot: Codable {
     var vpn: IKEv2TunnelSettings?
 }
 
+struct StorageReport: Equatable {
+    let fileName: String
+    let containerPath: String
+    let cipherLabel: String
+}
+
 @Observable
 final class ConfigStore {
     static let appGroupIdentifier = "group.com.vs.app"
@@ -84,6 +90,10 @@ final class ConfigStore {
     private static func describe(_ error: Error) -> String {
         if let keychain = error as? ConfigKeyError { return keychain.shortReason }
         return (error as? LocalizedError)?.errorDescription ?? "\(error)"
+    }
+
+    static func storageReport(storeURL: URL, cipher: ConfigCipher?, keyFailure: String?) -> StorageReport {
+        StorageReport(fileName: "待定", containerPath: "待定", cipherLabel: "待定")
     }
 
     @MainActor

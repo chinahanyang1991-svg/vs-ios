@@ -153,6 +153,22 @@ final class VSUITests: XCTestCase {
     }
 
     @MainActor
+    func testAboutPageShowsStoragePathAndEncryptionState() throws {
+        // 关于页「数据存储」要给出真实配置文件名和加密口径。G11b-2 已证实模拟器里的应用本体
+        // 拿得到钥匙串，所以这里可以直接断言 AES-GCM；哪天密钥这条路断了，红的是这一条，不用靠日志猜。
+        let app = launchApp()
+        app.tabBars.buttons["关于"].tap()
+        XCTAssertTrue(app.staticTexts["数据存储"].waitForExistence(timeout: 5), "关于页要有「数据存储」分区")
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "vs-config.json")).firstMatch.waitForExistence(timeout: 5),
+            "要写明配置文件叫什么、去看哪个目录，用户才找得到东西")
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "AES-GCM")).firstMatch.waitForExistence(timeout: 5),
+            "有密钥时界面要敢说出算法名")
+        attachScreenshot(app, name: "关于-数据存储")
+    }
+
+    @MainActor
     func testHomeTabStatesWhatIsKnownAndUnknown() throws {
         // 概览页只许复述 App 自己已有的数据：清空之后必须承认“还没有节点/从未刷新”，
         // 并且写清系统 VPN 连接状态是它读不到的，不能摆出一副已连上的样子。

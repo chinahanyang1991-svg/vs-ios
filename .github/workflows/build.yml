@@ -104,9 +104,13 @@ jobs:
           APP=$(find DerivedData/Build/Products -maxdepth 2 -name VS.app -type d | head -1)
           {
             echo "APP=$APP"
-            codesign -d --entitlements - --verbose=4 "$APP" 2>&1
             echo "--- 签名身份 ---"
             codesign -dvv "$APP" 2>&1
+            echo "--- entitlements 走 stdout（XML） ---"
+            codesign -d --entitlements :- "$APP" 2>&1
+            echo "--- entitlements 落文件再 plutil 读一遍（上一轮 - 混 verbose 只打出一个空 [Dict]） ---"
+            codesign -d --entitlements entitlements-dump.plist "$APP" 2>&1
+            plutil -p entitlements-dump.plist 2>&1
           } > signing-probe.txt
           cat signing-probe.txt
       - name: 两套 Suite 都要绿，红的也照样取回两份日志

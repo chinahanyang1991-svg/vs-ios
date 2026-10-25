@@ -36,6 +36,10 @@ final class VSUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["还没有节点"].waitForExistence(timeout: 5))
         app.terminate()
         app.launch()
+        // 冷启动落在第一个 tab「概览」，而这里要验的是节点列表有没有落盘，必须显式切过去。
+        let nodesTabAfterRelaunch = app.tabBars.buttons["节点"]
+        XCTAssertTrue(nodesTabAfterRelaunch.waitForExistence(timeout: 10))
+        nodesTabAfterRelaunch.tap()
         XCTAssertTrue(app.staticTexts["还没有节点"].waitForExistence(timeout: 5))
     }
 
@@ -94,6 +98,10 @@ final class VSUITests: XCTestCase {
 
         app.terminate()
         app.launch()
+        // 同上：改名落盘要看节点列表，冷启动现在停在「概览」。
+        let nodesTab = app.tabBars.buttons["节点"]
+        XCTAssertTrue(nodesTab.waitForExistence(timeout: 10))
+        nodesTab.tap()
         XCTAssertTrue(app.staticTexts["UI-Edited"].waitForExistence(timeout: 5),
                       "改名必须落盘，重启后不能回到旧名字")
         app.terminate()
@@ -156,7 +164,9 @@ final class VSUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["当前配置"].waitForExistence(timeout: 5), "概览页要有“当前配置”分区")
         XCTAssertTrue(app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "还没有节点")).firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["从未刷新"].waitForExistence(timeout: 5))
+        // 失败瞬间的层级读数显示这一行合成一条 '最近刷新, 从未刷新'，精确匹配取不到值。
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "从未刷新")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "读不到描述文件")).firstMatch.waitForExistence(timeout: 5),
             "模拟器包没有描述文件，概览页要直说读不到而不是编一个天数")

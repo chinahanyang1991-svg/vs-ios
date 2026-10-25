@@ -116,6 +116,13 @@ final class ConfigStore {
     static let readFailureReason = "本地配置文件读取失败，原文件保持未改动"
     private(set) var loadFailure: String?
 
+    // R15 占位：只为让新判据能编译、断言真红。真实实现要落在 write() 成功尾部与 exportProfile 的 catch 里。
+    private(set) var vpnSettingsSavedOnDisk = true
+
+    static func vpnPersistenceHint(savedOnDisk: Bool) -> String {
+        "表单未能保存到本地文件，下次进入会回到旧值"
+    }
+
     /// 恢复入口只做一件事：把解不开的那个文件拿走，不写任何字节。
     /// 正因为不写，密钥拿不到时它照样能走——而那恰恰是最需要它的时刻。
     static func discardUnreadableStore(at url: URL, requiresFailure reason: String?) throws {

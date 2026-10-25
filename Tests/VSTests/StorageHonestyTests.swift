@@ -105,4 +105,51 @@ final class StorageHonestyTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: blocked.path),
                        "退路要真的把堵住的路径拿走")
     }
+
+    // MARK: - R15：导出没落盘时，「内存里的值」和「盘上的值」是两件事
+
+    func testFailedExportMarksVPNSettingsAsUnsavedOnDisk() throws {
+        let store = ConfigStore(storeURL: try blockedStoreURL(), cipher: try cipher(11))
+        do {
+            _ = try store.exportProfile(makeSettings())
+        } catch {
+            XCTFail("前提：导出这条路不该被保存失败挡死：\(error)")
+        }
+        XCTAssertEqual(store.vpnSettings.serverHost, "vpn.example.com",
+                       "内存里要留着用户刚填的值，别让人重填一遍")
+        XCTAssertFalse(store.vpnSettingsSavedOnDisk,
+                       "盘上还是旧值，就得有一个能问到的状态给界面用")
+    }
+
+    func testLaterSuccessfulSaveClearsTheUnsavedMark() throws {
+        let blocked = try blockedStoreURL()
+        let store = ConfigStore(storeURL: blocked, cipher: try cipher(11))
+        _ = try store.exportProfile(makeSettings())
+        XCTAssertFalse(store.vpnSettingsSavedOnDisk, "第一步：导出成功了，但确实没落盘")
+        try FileManager.default.removeItem(at: blocked)
+        try store.updateVPNSettings(makeSettings())
+        XCTAssertTrue(store.vpnSettingsSavedOnDisk,
+                      "路径腾开之后一次成功的保存要把状态收回来，界面不许继续报「没保存」")
+    }
+
+    func testHealthyStoreKeepsTheSavedOnDiskMarkTrue() throws {
+        let store = ConfigStore(storeURL: directory.appendingPathComponent("vs-config.json"),
+                                cipher: try cipher(33))
+        XCTAssertTrue(store.vpnSettingsSavedOnDisk,
+                      "从没失败过的存储不该报「未保存」——这条是反向守卫")
+        try store.updateVPNSettings(makeSettings())
+        XCTAssertTrue(store.vpnSettingsSavedOnDisk, "成功保存之后仍然要说得出「已保存」")
+    }
+
+    func testPersistenceHintSeparatesSessionOnlyFromTrueRollback() {
+        let saved = ConfigStore.vpnPersistenceHint(savedOnDisk: true)
+        let sessionOnly = ConfigStore.vpnPersistenceHint(savedOnDisk: false)
+        XCTAssertNotEqual(saved, sessionOnly, "两种情况的后果不一样，一句话不许通用")
+        XCTAssertTrue(saved.contains("下次进入会回到旧值"),
+                      "真回退的那种才配用旧文案：\(saved)")
+        XCTAssertTrue(sessionOnly.contains("本机文件里还是旧值"),
+                      "没落盘时要说清磁盘上是旧值：\(sessionOnly)")
+        XCTAssertTrue(sessionOnly.contains("退出 App"),
+                      "…并点明这只撑到本次会话：\(sessionOnly)")
+    }
 }

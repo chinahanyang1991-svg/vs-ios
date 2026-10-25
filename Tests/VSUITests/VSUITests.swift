@@ -169,6 +169,18 @@ final class VSUITests: XCTestCase {
     }
 
     @MainActor
+    func testUnreadableStoreRecoveryEntryStaysHiddenWhenConfigLoads() throws {
+        // 「清除无法读取的旧配置」只在读不到的那一态出现；读得到时它就是第二个清空按钮，
+        // 点一下会把能用的配置连带拿走，所以这条必须钉住"平时不许露出来"。
+        let app = launchApp()
+        app.tabBars.buttons["订阅"].tap()
+        XCTAssertTrue(app.staticTexts["本地数据"].waitForExistence(timeout: 5), "订阅页要有「本地数据」分区")
+        XCTAssertFalse(app.buttons["清除无法读取的旧配置，重新开始"].exists,
+                       "配置读得到时不该出现这条退路")
+        attachScreenshot(app, name: "订阅-无恢复入口")
+    }
+
+    @MainActor
     func testHomeTabStatesWhatIsKnownAndUnknown() throws {
         // 概览页只许复述 App 自己已有的数据：清空之后必须承认“还没有节点/从未刷新”，
         // 并且写清系统 VPN 连接状态是它读不到的，不能摆出一副已连上的样子。

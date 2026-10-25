@@ -109,16 +109,21 @@ final class ConfigStore {
         )
     }
 
-    // R13 红轮占位：loadFailure 还没接进 reload()，discard 也一律拒绝，
-    // 所以这一族的判据本轮必须红；绿轮补两处接线。
+    /// 读不到时界面要能问到一个状态；这句话同时进 lastStatus，两处不许各说一套。
+    static let unreadableReason = "本地配置无法读取，原文件保持未改动"
     private(set) var loadFailure: String?
 
+    /// 恢复入口只做一件事：把解不开的那个文件拿走，不写任何字节。
+    /// 正因为不写，密钥拿不到时它照样能走——而那恰恰是最需要它的时刻。
     static func discardUnreadableStore(at url: URL, requiresFailure reason: String?) throws {
-        throw ConfigStoreError.noUnreadableStore
+        guard reason != nil else { throw ConfigStoreError.noUnreadableStore }
+        try FileManager.default.removeItem(at: url)
     }
 
     func discardUnreadableStore() throws {
         try Self.discardUnreadableStore(at: storeURL, requiresFailure: loadFailure)
+        loadFailure = nil
+        lastStatus = "已清除无法读取的旧配置，现在可以重新导入了"
     }
 
     @MainActor
@@ -142,11 +147,16 @@ final class ConfigStore {
     }
 
     func reload() {
-        guard let data = try? Data(contentsOf: storeURL) else { return }
-        guard let snapshot = ConfigStore.decode(data, with: cipher) else {
-            lastStatus = "本地配置无法读取，原文件保持未改动"
+        guard let data = try? Data(contentsOf: storeURL) else {
+            loadFailure = nil
             return
         }
+        guard let snapshot = ConfigStore.decode(data, with: cipher) else {
+            loadFailure = Self.unreadableReason
+            lastStatus = Self.unreadableReason
+            return
+        }
+        loadFailure = nil
         nodes = snapshot.nodes
         subscriptions = snapshot.subscriptions
         if let vpn = snapshot.vpn { vpnSettings = vpn }

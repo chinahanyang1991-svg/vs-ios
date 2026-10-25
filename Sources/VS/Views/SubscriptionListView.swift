@@ -61,7 +61,20 @@ struct SubscriptionListView: View {
                 }
                 Section("本地数据") {
                     LabeledContent("当前节点数", value: "\(store.nodes.count)")
-                    Text(store.lastStatus).font(.caption).foregroundStyle(.secondary)
+                    Text(store.lastStatus)
+                        .font(.caption)
+                        .foregroundStyle(store.loadFailure == nil ? Color.secondary : Color.orange)
+                    if store.loadFailure != nil {
+                        // 读不到时内存是空的，下面那个「清空」按钮正好是灰的——这条退路不给就别无出路。
+                        Button("清除无法读取的旧配置，重新开始", role: .destructive) {
+                            do {
+                                try store.discardUnreadableStore()
+                                message = "旧文件已拿走，现在可以重新导入了。"
+                            } catch {
+                                message = "清除未生效：\((error as NSError).localizedDescription)"
+                            }
+                        }
+                    }
                     Button("清空全部节点与记录", role: .destructive) {
                         do {
                             try store.removeAll()

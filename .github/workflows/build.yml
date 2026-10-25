@@ -98,6 +98,17 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER= \
             CODE_SIGN_ENTITLEMENTS=Support/VS.simulator.entitlements \
             2>&1 | tee ui.log
+      - name: 导出模拟器包实际嵌入的 entitlements（-34018 的唯一硬证据）
+        if: always()
+        run: |
+          APP=$(find DerivedData/Build/Products -maxdepth 2 -name VS.app -type d | head -1)
+          {
+            echo "APP=$APP"
+            codesign -d --entitlements - --verbose=4 "$APP" 2>&1
+            echo "--- 签名身份 ---"
+            codesign -dvv "$APP" 2>&1
+          } > signing-probe.txt
+          cat signing-probe.txt
       - name: 两套 Suite 都要绿，红的也照样取回两份日志
         if: always()
         run: |
@@ -127,6 +138,7 @@ jobs:
           path: |
             unit.log
             ui.log
+            signing-probe.txt
             ui-evidence
 
   device-build:

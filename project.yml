@@ -48,6 +48,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vs.app.tests
+        # 云端两套测试改用 ad-hoc 签名后，测试包也得有 Info.plist，否则 codesign 直接拒绝整个 build。
+        GENERATE_INFOPLIST_FILE: YES
   VSUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -59,6 +61,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vs.app.uitests
         TEST_TARGET_NAME: VS
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   VS:
     build:

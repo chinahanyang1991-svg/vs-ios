@@ -116,6 +116,7 @@ final class ConfigStore {
     /// 恢复入口只做一件事：把解不开的那个文件拿走，不写任何字节。
     /// 正因为不写，密钥拿不到时它照样能走——而那恰恰是最需要它的时刻。
     static func discardUnreadableStore(at url: URL, requiresFailure reason: String?) throws {
+        guard reason != nil else { throw ConfigStoreError.noUnreadableStore }
         try FileManager.default.removeItem(at: url)
     }
 

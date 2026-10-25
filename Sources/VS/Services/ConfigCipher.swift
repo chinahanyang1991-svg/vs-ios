@@ -34,12 +34,15 @@ struct ConfigCipher: Sendable {
     }
 
     static func looksEncrypted(_ data: Data) -> Bool {
-        true
+        data.starts(with: Self.magic)
     }
 
     /// 信封 = 魔数 + combined（nonce‖密文‖标签）。每次封装都换随机 nonce，同一份明文两次写出的字节必然不同。
     func seal(_ plaintext: Data) throws -> Data {
-        Data(Self.magic) + plaintext
+        guard let combined = try AES.GCM.seal(plaintext, using: SymmetricKey(data: keyData)).combined else {
+            throw ConfigCipherError.sealFailed
+        }
+        return Data(Self.magic) + combined
     }
 
     func open(_ envelope: Data) throws -> Data {

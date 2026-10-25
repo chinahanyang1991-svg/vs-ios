@@ -32,7 +32,7 @@ enum ConfigKey {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: key,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
     }
 

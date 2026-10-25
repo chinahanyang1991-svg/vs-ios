@@ -154,8 +154,12 @@ final class ConfigStore {
             loadFailure = nil
             return
         }
-        guard let data = try? Data(contentsOf: storeURL) else {
-            loadFailure = nil
+        let data: Data
+        do {
+            data = try Data(contentsOf: storeURL)
+        } catch {
+            loadFailure = Self.readFailureReason
+            lastStatus = Self.readFailureReason
             return
         }
         guard let snapshot = ConfigStore.decode(data, with: cipher) else {
@@ -296,7 +300,6 @@ final class ConfigStore {
     /// 导出本身不需要钥匙串也不需要旧配置——把「保存到本地」这道门放在前面，
     /// 就等于本机密钥一拿不到，用户连唯一的隧道手段都做不出来。
     func exportProfile(_ settings: IKEv2TunnelSettings) throws -> URL {
-        try updateVPNSettings(settings)
         let data = try IKEv2ProfileBuilder.mobileconfig(settings)
         try FileManager.default.createDirectory(at: profilesDirectory, withIntermediateDirectories: true)
         let url = profilesDirectory.appendingPathComponent(IKEv2ProfileBuilder.suggestedFileName(settings))

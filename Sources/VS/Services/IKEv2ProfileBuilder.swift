@@ -247,7 +247,9 @@ enum IKEv2ProfileBuilder {
             lines.append("用户名：\(trimmed(settings.username))")
             lines.append("密码：\(settings.embedSecrets && !isBlank(settings.password) ? "已写入描述文件" : "连接时手动输入")")
         } else {
-            lines.append("共享密钥：已写入描述文件")
+            lines.append(settings.embedSecrets
+                ? "共享密钥：已写入描述文件"
+                : "共享密钥：未写入——PSK 必须勾选“把凭据写入描述文件”，否则生成会被拒")
         }
         let servers = dnsServers(from: settings.dnsInput)
         if !servers.isEmpty { lines.append("DNS：\(servers.joined(separator: "、"))") }

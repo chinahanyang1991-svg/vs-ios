@@ -69,12 +69,6 @@ struct VPNProfileView: View {
                             .font(.callout)
                             .foregroundStyle(.orange)
                     }
-                    // 「生成成了」和「没能存到本机」是两件事，一屏里都要说，不能只说其中一半。
-                    if let statusNote {
-                        Text(statusNote)
-                            .font(.callout)
-                            .foregroundStyle(statusNote.contains("未能保存") ? Color.orange : Color.secondary)
-                    }
                     if !settings.serverHost.isEmpty {
                         Text(IKEv2ProfileBuilder.sanitizedSummary(settings))
                             .font(.callout)

@@ -40,7 +40,7 @@ final class ConfigStoreEncryptionTests: XCTestCase {
     }
 
     func testLegacyPlainJSONFileIsMigratedOnFirstLoad() throws {
-        let legacy = JSONSerialization.data(withJSONObject: [
+        let legacy = try JSONSerialization.data(withJSONObject: [
             "version": 1,
             "nodes": [["name": "one", "kind": "trojan", "host": "one.example", "port": 443,
                        "credential": "s3cret-pass", "method": NSNull(),

@@ -145,6 +145,27 @@ final class VSUITests: XCTestCase {
     }
 
     @MainActor
+    func testHomeTabStatesWhatIsKnownAndUnknown() throws {
+        // 概览页只许复述 App 自己已有的数据：清空之后必须承认“还没有节点/从未刷新”，
+        // 并且写清系统 VPN 连接状态是它读不到的，不能摆出一副已连上的样子。
+        let app = launchApp()
+        app.tabBars.buttons["订阅"].tap()
+        let clear = app.buttons["清空全部节点与记录"]
+        if clear.isEnabled { clear.tap() }
+        app.tabBars.buttons["概览"].tap()
+        XCTAssertTrue(app.staticTexts["当前配置"].waitForExistence(timeout: 5), "概览页要有“当前配置”分区")
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "还没有节点")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["从未刷新"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "读不到描述文件")).firstMatch.waitForExistence(timeout: 5),
+            "模拟器包没有描述文件，概览页要直说读不到而不是编一个天数")
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "本 App 读不到")).firstMatch.waitForExistence(timeout: 5))
+        attachScreenshot(app, name: "概览-空状态")
+    }
+
+    @MainActor
     private func launchApp() -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()

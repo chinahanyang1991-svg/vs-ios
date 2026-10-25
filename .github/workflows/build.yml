@@ -26,6 +26,8 @@ jobs:
       - name: Generate project
         run: xcodegen generate
       - name: Unit tests on simulator
+        id: unit
+        continue-on-error: true
         run: |
           set -o pipefail
           DEST=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | startswith("com.apple.CoreSimulator.SimRuntime.iOS-18-")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))] | first | .udid // empty')
@@ -46,12 +48,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee unit.log
       - name: Restart simulator so UI tests cannot attach to a leftover unit host
+        id: restart
+        if: always()
         run: |
           set -euo pipefail
           xcrun simctl shutdown "$SIM_DEST" || true
           xcrun simctl boot "$SIM_DEST"
           xcrun simctl bootstatus "$SIM_DEST" -b
       - name: UI tests on simulator
+        id: ui
+        if: always()
+        continue-on-error: true
         run: |
           set -o pipefail
           xcodebuild test \
@@ -64,6 +71,22 @@ jobs:
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee ui.log
+      - name: 两套 Suite 都要绿，红的也照样取回两份日志
+        if: always()
+        run: |
+          set -euo pipefail
+          status=0
+          if test "${{ steps.unit.outcome }}" != "success"; then
+            echo "单元 Suite 失败（读数见 unit.log）"; status=1
+          fi
+          if test "${{ steps.ui.outcome }}" != "success"; then
+            echo "UI Suite 失败（读数见 ui.log）"; status=1
+          fi
+          if test "${{ steps.restart.outcome }}" != "success"; then
+            echo "模拟器重启失败，UI 读数不可信"; status=1
+          fi
+          echo "unit=${{ steps.unit.outcome }} restart=${{ steps.restart.outcome }} ui=${{ steps.ui.outcome }}"
+          exit $status
       - name: Export UI evidence
         if: always()
         run: |

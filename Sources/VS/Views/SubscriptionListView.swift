@@ -136,6 +136,30 @@ struct AboutView: View {
                 LabeledContent("适用系统", value: "iOS 18")
                 LabeledContent("广告与统计", value: "无")
             }
+            Section("安装签名") {
+                if let signature {
+                    LabeledContent("剩余有效天数", value: signature.isExpired ? "已过期" : "\(signature.daysRemaining)")
+                    LabeledContent("到期时间", value: signature.expiresAt.formatted(
+                        date: .numeric, time: .shortened))
+                    LabeledContent("描述文件", value: signature.profileName)
+                    LabeledContent("签名类型", value: signature.isDevelopment
+                        ? "开发签名（允许附加调试器）" : "非开发签名")
+                    LabeledContent("Bundle ID", value: signature.bundleIdentifier)
+                    LabeledContent("设备名单", value: signature.deviceCount.map { "\($0) 台" } ?? "描述文件未记载")
+                    if signature.deviceCount != nil {
+                        Text("描述文件不写明本机是哪一台，App 也读不到自己的设备码；能装上并能运行，就说明这台机器在册（iOS 会拒绝未登记的设备）。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("此处只读取描述文件里的到期时间，没有校验 Apple 的签名；Apple 可以在到期日之前就让它失效。")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("当前构建里没有可读取的签名描述文件（未签名的云构建包、模拟器包，或它超出解析上限），因此无法显示有效期。")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
             Section("数据存储") {
                 LabeledContent("App Group", value: ConfigStore.appGroupIdentifier)
                 Text("节点、订阅记录只写在本机容器里，不上传任何服务器。")

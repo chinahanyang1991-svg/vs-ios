@@ -382,6 +382,6 @@ final class ConfigStore {
         }
         // 快照里的 vpn 段取的就是当前内存值（或被调用方原样递回来的那份），
         // 所以只要字节真落到盘上，两边就重新对齐了——失败路径在上面已 throw，走不到这里。
-        vpnSettingsSavedOnDisk = false
+        vpnSettingsSavedOnDisk = true
     }
 }

@@ -123,9 +123,7 @@ final class ConfigStore {
     /// 两种失败的后果不同，不许共用一句：没落盘 ⇒ 新值只撑到本次会话；
     /// 落盘失败且内存未更新 ⇒ 下次进页面就是旧值。
     static func vpnPersistenceHint(savedOnDisk: Bool) -> String {
-        savedOnDisk
-            ? "表单未能保存到本地文件，下次进入会回到旧值"
-            : "表单未能保存到本机文件里——本机文件里还是旧值，这次填的只在这次运行里有效，退出 App 后同样回到旧值"
+        return "表单未能保存到本地文件，下次进入会回到旧值"
     }
 
     /// 恢复入口只做一件事：把解不开的那个文件拿走，不写任何字节。
@@ -321,7 +319,6 @@ final class ConfigStore {
             try write(nodes: nodes, subscriptions: subscriptions, vpn: settings)
             lastStatus = "已生成描述文件 \(url.lastPathComponent)"
         } catch {
-            vpnSettingsSavedOnDisk = false
             lastStatus = "已生成描述文件 \(url.lastPathComponent)，但表单未能保存到本机文件：\(Self.describe(error))"
         }
         return url
@@ -382,6 +379,5 @@ final class ConfigStore {
         }
         // 快照里的 vpn 段取的就是当前内存值（或被调用方原样递回来的那份），
         // 所以只要字节真落到盘上，两边就重新对齐了——失败路径在上面已 throw，走不到这里。
-        vpnSettingsSavedOnDisk = true
     }
 }

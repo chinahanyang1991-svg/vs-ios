@@ -162,6 +162,7 @@ struct AboutView: View {
                 }
             }
             Section("数据存储") {
+                LabeledContent("配置文件", value: store.storageReport.fileName)
                 LabeledContent("所在目录", value: store.storageReport.containerPath)
                 LabeledContent("App Group", value: ConfigStore.appGroupIdentifier)
                     .font(.caption)

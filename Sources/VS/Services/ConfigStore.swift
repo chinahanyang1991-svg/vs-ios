@@ -9,12 +9,13 @@ struct SubscriptionMeta: Identifiable, Codable, Hashable {
     var rejectedCount: Int
 }
 
-enum ConfigStoreError: LocalizedError {
+enum ConfigStoreError: LocalizedError, Equatable {
     case unknownSubscription
     case unknownNode
     case invalidNode(String)
     case duplicateNode
     case encryptionUnavailable(String)
+    case noUnreadableStore
 
     var errorDescription: String? {
         switch self {
@@ -28,6 +29,8 @@ enum ConfigStoreError: LocalizedError {
             return "已经有完全相同的节点，未合并或丢弃任何一条"
         case .encryptionUnavailable(let reason):
             return "本机加密密钥不可用，配置未写入任何字节（\(reason)）"
+        case .noUnreadableStore:
+            return "本地配置其实读得到，不该走「清除重来」这条路；没有任何文件被删除"
         }
     }
 }
@@ -104,6 +107,18 @@ final class ConfigStore {
                 ? "AES-GCM 信封，密钥只在本机钥匙串（不随备份同步）"
                 : "未启用加密：本机加密密钥不可用，配置未写入任何字节（\(keyFailure ?? "调用方没给密钥，本机钥匙串也没读到")）"
         )
+    }
+
+    // R13 红轮占位：loadFailure 还没接进 reload()，discard 也一律拒绝，
+    // 所以这一族的判据本轮必须红；绿轮补两处接线。
+    private(set) var loadFailure: String?
+
+    static func discardUnreadableStore(at url: URL, requiresFailure reason: String?) throws {
+        throw ConfigStoreError.noUnreadableStore
+    }
+
+    func discardUnreadableStore() throws {
+        try Self.discardUnreadableStore(at: storeURL, requiresFailure: loadFailure)
     }
 
     @MainActor

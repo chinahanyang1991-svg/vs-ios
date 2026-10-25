@@ -32,7 +32,7 @@ enum HomeSummaryBuilder {
                                nodeCount: nodes.filter { $0.sourceURL == meta.url }.count,
                                rejectedCount: meta.rejectedCount, addedAt: meta.addedAt)
         }
-        .sorted { $0.addedAt < $1.addedAt }
+        .sorted { $0.addedAt > $1.addedAt }
         return HomeSummary(
             sources: sources,
             manualNodeCount: nodes.filter { $0.sourceURL == nil }.count,

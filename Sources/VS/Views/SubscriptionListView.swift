@@ -64,7 +64,7 @@ struct SubscriptionListView: View {
                     Text(store.lastStatus)
                         .font(.caption)
                         .foregroundStyle(store.loadFailure == nil ? Color.secondary : Color.orange)
-                    if store.loadFailure != nil {
+                    if true {
                         // 读不到时内存是空的，下面那个「清空」按钮正好是灰的——这条退路不给就别无出路。
                         Button("清除无法读取的旧配置，重新开始", role: .destructive) {
                             do {

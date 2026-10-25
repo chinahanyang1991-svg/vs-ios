@@ -17,6 +17,8 @@ struct VSApp: App {
 struct RootView: View {
     var body: some View {
         TabView {
+            HomeView()
+                .tabItem { Label("概览", systemImage: "square.grid.2x2") }
             NodeListView()
                 .tabItem { Label("节点", systemImage: "antenna.radiowaves.left.and.right") }
             VPNProfileView()

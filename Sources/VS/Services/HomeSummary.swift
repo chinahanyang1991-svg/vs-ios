@@ -4,7 +4,8 @@ import Foundation
 /// Every field is derived from data the app already owns; nothing here claims a system
 /// VPN connection state, which a normal app cannot read.
 struct HomeSummary: Equatable, Sendable {
-    struct Source: Equatable, Sendable {
+    struct Source: Identifiable, Equatable, Sendable {
+        var id: UUID
         var title: String
         var nodeCount: Int
         var rejectedCount: Int
@@ -26,7 +27,18 @@ struct HomeSummary: Equatable, Sendable {
 enum HomeSummaryBuilder {
     static func make(subscriptions: [SubscriptionMeta], nodes: [Node],
                      profileCount: Int?, signature: SignatureStatus?) -> HomeSummary {
-        HomeSummary(sources: [], manualNodeCount: 0, nodeCount: 0,
-                    profileCount: 0, lastRefreshAt: nil, signature: nil)
+        let sources = subscriptions.map { meta in
+            HomeSummary.Source(id: meta.id, title: meta.title,
+                               nodeCount: nodes.filter { $0.sourceURL == meta.url }.count,
+                               rejectedCount: meta.rejectedCount, addedAt: meta.addedAt)
+        }
+        .sorted { $0.addedAt > $1.addedAt }
+        return HomeSummary(
+            sources: sources,
+            manualNodeCount: nodes.filter { $0.sourceURL == nil }.count,
+            nodeCount: nodes.count,
+            profileCount: profileCount,
+            lastRefreshAt: subscriptions.map(\.addedAt).max(),
+            signature: signature)
     }
 }

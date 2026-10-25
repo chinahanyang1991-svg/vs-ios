@@ -44,6 +44,29 @@ enum SubscriptionFetcher {
         return text
     }
 
+    /// 占位（R16 红轮）：先把整条流吃干，再比上限——这就是本轮要修掉的现状。
+    static func readBounded<S: AsyncSequence>(_ bytes: S, limit: Int) async throws -> Data
+        where S.Element == UInt8 {
+        var data = Data()
+        for try await byte in bytes { data.append(byte) }
+        guard data.count <= limit else { throw SubscriptionFetcherError.bodyTooLarge }
+        return data
+    }
+
+    /// 占位（R16 红轮）：判定顺序照今天 fetch 的样子——先取完正文，再看状态码与声明长度。
+    static func fetch<S: AsyncSequence>(url: URL, timeout: TimeInterval = 15,
+                                        limit: Int = maxResponseBytes,
+                                        withStream open: (URLRequest) async throws -> (HTTPURLResponse, S)) async throws -> String
+        where S.Element == UInt8 {
+        var request = URLRequest(url: url, timeoutInterval: timeout)
+        request.setValue("VS/0.1", forHTTPHeaderField: "User-Agent")
+        let (http, bytes) = try await open(request)
+        let data = try await readBounded(bytes, limit: limit)
+        guard (200...299).contains(http.statusCode) else { throw SubscriptionFetcherError.httpStatus(http.statusCode) }
+        if http.expectedContentLength > Int64(limit) { throw SubscriptionFetcherError.bodyTooLarge }
+        return try decodeBody(data)
+    }
+
     static func fetch(url: URL, timeout: TimeInterval = 15) async throws -> String {
         var request = URLRequest(url: url, timeoutInterval: timeout)
         request.setValue("VS/0.1", forHTTPHeaderField: "User-Agent")

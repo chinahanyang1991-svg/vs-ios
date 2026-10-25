@@ -25,6 +25,18 @@ final class ConfigStoreEncryptionTests: XCTestCase {
 
     private func sampleNodeLine() -> String { "trojan://s3cret-pass@one.example:443#one" }
 
+    private func legacyPlainBytes() throws -> Data {
+        try JSONSerialization.data(withJSONObject: [
+            "version": 1,
+            "nodes": [["name": "one", "kind": "trojan", "host": "one.example", "port": 443,
+                       "credential": "s3cret-pass", "method": NSNull(),
+                       "parameters": [String: String](), "sourceURL": feedURL]],
+            "subscriptions": [["id": UUID().uuidString, "title": "A", "url": feedURL,
+                               "addedAt": Date().timeIntervalSince1970, "rejectedCount": 0]],
+            "vpn": NSNull(),
+        ])
+    }
+
     func testSavedFileHidesNodePasswordAndSubscriptionLink() throws {
         let store = ConfigStore(storeURL: storeURL, cipher: try cipher(1))
         _ = try store.importNodes(from: sampleNodeLine(), title: "A", url: feedURL)
@@ -40,15 +52,7 @@ final class ConfigStoreEncryptionTests: XCTestCase {
     }
 
     func testLegacyPlainJSONFileIsMigratedOnFirstLoad() throws {
-        let legacy = try JSONSerialization.data(withJSONObject: [
-            "version": 1,
-            "nodes": [["name": "one", "kind": "trojan", "host": "one.example", "port": 443,
-                       "credential": "s3cret-pass", "method": NSNull(),
-                       "parameters": [String: String](), "sourceURL": feedURL]],
-            "subscriptions": [["id": UUID().uuidString, "title": "A", "url": feedURL,
-                               "addedAt": Date().timeIntervalSince1970, "rejectedCount": 0]],
-            "vpn": NSNull(),
-        ])
+        let legacy = try legacyPlainBytes()
         try legacy.write(to: storeURL)
         XCTAssertFalse(ConfigCipher.looksEncrypted(legacy))
 
@@ -73,5 +77,20 @@ final class ConfigStoreEncryptionTests: XCTestCase {
                       "拿错钥匙要说“读不到”，不能报成“你还没有节点”")
         XCTAssertTrue(stranger.nodes.isEmpty)
         XCTAssertEqual(try Data(contentsOf: storeURL), before, "读不到时一个字节都不许改")
+    }
+
+    func testMigrationWriteFailureStillReportsTheLoadedCount() throws {
+        let readonlyDir = directory.appendingPathComponent("legacy-readonly", isDirectory: true)
+        try FileManager.default.createDirectory(at: readonlyDir, withIntermediateDirectories: true)
+        let url = readonlyDir.appendingPathComponent("vs-config.json")
+        try legacyPlainBytes().write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: readonlyDir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: readonlyDir.path) }
+
+        let store = ConfigStore(storeURL: url, cipher: try cipher(5))
+        XCTAssertEqual(store.nodes.count, 1, "迁移写不下去，读到的节点也不能谎报成没有")
+        XCTAssertTrue(store.lastStatus.hasPrefix("已载入"), "实际读数：\(store.lastStatus)")
+        XCTAssertTrue(store.lastStatus.contains("未能换成加密信封"),
+                      "迁移失败要单独说清楚，实际读数：\(store.lastStatus)")
     }
 }

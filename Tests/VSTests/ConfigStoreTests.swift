@@ -14,7 +14,7 @@ final class ConfigStoreTests: XCTestCase {
     }
 
     private func makeStore() -> ConfigStore {
-        ConfigStore(storeURL: storeURL)
+        ConfigStore(storeURL: storeURL, cipher: testConfigCipher)
     }
 
     private var storeURL: URL {
@@ -65,13 +65,13 @@ final class ConfigStoreTests: XCTestCase {
         let directory = temporaryDirectory.appendingPathComponent("readonly", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("vs-config.json")
-        let seeded = ConfigStore(storeURL: url)
+        let seeded = ConfigStore(storeURL: url, cipher: testConfigCipher)
         _ = try seeded.importNodes(from: "trojan://p1@one.example:443#one", title: "A",
                                    url: "https://feed.example/a")
         try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
 
-        let store = ConfigStore(storeURL: url)
+        let store = ConfigStore(storeURL: url, cipher: testConfigCipher)
         let meta = try XCTUnwrap(store.subscriptions.first)
         XCTAssertThrowsError(try store.removeSubscription(meta))
         XCTAssertEqual(store.nodes.count, 1, "写盘失败时内存不能提前删掉已经落盘的节点")
@@ -192,12 +192,12 @@ final class ConfigStoreTests: XCTestCase {
         let directory = temporaryDirectory.appendingPathComponent("readonly-edit", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("vs-config.json")
-        let seeded = ConfigStore(storeURL: url)
+        let seeded = ConfigStore(storeURL: url, cipher: testConfigCipher)
         _ = try seeded.importNodes(from: "trojan://p1@one.example:443#one", title: "A")
         try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
 
-        let store = ConfigStore(storeURL: url)
+        let store = ConfigStore(storeURL: url, cipher: testConfigCipher)
         let original = try XCTUnwrap(store.nodes.first)
         var renamed = original
         renamed.name = "改过"

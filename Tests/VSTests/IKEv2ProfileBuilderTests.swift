@@ -14,7 +14,8 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
     }
 
     private func makeStore() -> ConfigStore {
-        ConfigStore(storeURL: temporaryDirectory.appendingPathComponent("vs-config.json"))
+        ConfigStore(storeURL: temporaryDirectory.appendingPathComponent("vs-config.json"),
+                    cipher: testConfigCipher)
     }
 
     private func eapSettings() -> IKEv2TunnelSettings {
@@ -289,7 +290,7 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
 
     func testPersistedFileNeverContainsRawLinks() throws {
         let url = temporaryDirectory.appendingPathComponent("vs-config.json")
-        let store = ConfigStore(storeURL: url)
+        let store = ConfigStore(storeURL: url, cipher: testConfigCipher)
         _ = try store.importNodes(from: "trojan://sup3rsecret@one.example:443#note", title: "t",
                                  url: "https://feed.example/suba")
         let raw = try Data(contentsOf: url)
@@ -304,7 +305,8 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         // 模拟器以 runner 普通用户运行，权限位真实生效。
         let directory = temporaryDirectory.appendingPathComponent("readonly", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let store = ConfigStore(storeURL: directory.appendingPathComponent("vs-config.json"))
+        let store = ConfigStore(storeURL: directory.appendingPathComponent("vs-config.json"),
+                                cipher: testConfigCipher)
         try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
         XCTAssertThrowsError(try store.importNodes(from: "trojan://p@one.example:443#n", title: "t"))
@@ -317,7 +319,7 @@ final class IKEv2ProfileBuilderTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("vs-config.json")
         try Data("[1,2,3]".utf8).write(to: url)
-        let store = ConfigStore(storeURL: url)
+        let store = ConfigStore(storeURL: url, cipher: testConfigCipher)
         XCTAssertTrue(store.lastStatus.contains("无法解析") || store.lastStatus.contains("无法读取"),
                       "实际读数：\(store.lastStatus)")
         XCTAssertFalse(store.lastStatus.contains("备份"), "代码里没有备份动作，就不能声称已备份")

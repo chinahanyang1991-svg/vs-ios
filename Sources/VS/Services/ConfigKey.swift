@@ -15,20 +15,24 @@ enum ConfigKeyError: LocalizedError {
 }
 
 enum ConfigKey {
-    private static let service = "com.vs.app.config-key"
-    private static let account = "vs-config"
+    static let service = "com.vs.app.config-key"
+    static let account = "vs-config"
+
+    /// 抽成纯函数是为了给「ThisDeviceOnly」一个能红的判据：写成共享备份档在运行期没人发现得了。
+    static func addItem(for key: Data) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: key,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+    }
 
     static func loadOrCreate() throws -> Data {
         if let existing = try read() { return existing }
         let generated = try randomKey()
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: generated,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        let status = SecItemAdd(addItem(for: generated) as CFDictionary, nil)
         if status == errSecSuccess { return generated }
         if status == errSecDuplicateItem, let raced = try read() { return raced }
         throw ConfigKeyError.keychain(status)

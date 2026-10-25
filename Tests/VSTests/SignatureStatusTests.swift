@@ -83,8 +83,11 @@ final class SignatureStatusTests: XCTestCase {
     }
 
     // ---------- the facts the UI shows ----------
-    func testValidDevelopmentProfileReportsDaysAndDevices() {
-        let status = try! XCTUnwrap(
+    // These use `throws` + `try XCTUnwrap` on purpose: `try!` turns a missing value into a
+    // crash, and a crashed host is recorded as "Executed 0 tests, with 0 failures" instead
+    // of a red assertion, which would hide the failure in the aggregate counts.
+    func testValidDevelopmentProfileReportsDaysAndDevices() throws {
+        let status = try XCTUnwrap(
             SignatureStatusReader.parse(signedEnvelope(profileBody(issuedAt: now, ttlDays: 7)), now: now))
         XCTAssertEqual(status.profileName, "VS Development")
         XCTAssertEqual(status.teamName, "VS Personal")
@@ -96,24 +99,24 @@ final class SignatureStatusTests: XCTestCase {
         XCTAssertEqual(status.expiresAt.timeIntervalSince(now), 7 * 86400, accuracy: 1)
     }
 
-    func testProfileExpiringWithinSixHoursIsValidWithZeroDaysLeft() {
+    func testProfileExpiringWithinSixHoursIsValidWithZeroDaysLeft() throws {
         let issued = now.addingTimeInterval(-7 * 86400 + 6 * 3600)
-        let status = try! XCTUnwrap(
+        let status = try XCTUnwrap(
             SignatureStatusReader.parse(signedEnvelope(profileBody(issuedAt: issued, ttlDays: 7)), now: now))
         XCTAssertEqual(status.daysRemaining, 0)
         XCTAssertFalse(status.isExpired, "six hours of validity is not an expired profile")
     }
 
-    func testLapsedProfileIsFlaggedExpired() {
+    func testLapsedProfileIsFlaggedExpired() throws {
         let issued = now.addingTimeInterval(-7 * 86400 - 3600)
-        let status = try! XCTUnwrap(
+        let status = try XCTUnwrap(
             SignatureStatusReader.parse(signedEnvelope(profileBody(issuedAt: issued, ttlDays: 7)), now: now))
         XCTAssertTrue(status.isExpired)
         XCTAssertEqual(status.daysRemaining, 0, "a lapsed profile must not report days left")
     }
 
-    func testProfileWithoutDeviceListReportsUnknownDeviceCount() {
-        let status = try! XCTUnwrap(SignatureStatusReader.parse(
+    func testProfileWithoutDeviceListReportsUnknownDeviceCount() throws {
+        let status = try XCTUnwrap(SignatureStatusReader.parse(
             signedEnvelope(profileBody(issuedAt: now, ttlDays: 30, devices: nil, getTaskAllow: false)),
             now: now))
         XCTAssertNil(status.deviceCount)

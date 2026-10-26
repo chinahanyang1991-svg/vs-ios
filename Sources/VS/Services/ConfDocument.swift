@@ -101,7 +101,9 @@ enum ConfCodec {
     private static func meaningful(_ raw: String) -> String? {
         let line = raw.trimmingCharacters(in: .whitespaces)
         guard !line.isEmpty, !line.hasPrefix("#"), !line.hasPrefix("//") else { return nil }
-        return line
+        guard let hash = line.firstIndex(of: "#") else { return line }
+        let body = String(line[..<hash]).trimmingCharacters(in: .whitespaces)
+        return body.isEmpty ? nil : body
     }
 
     /// 段名一律小写比对：`[Rule]`、`[RULE]`、`[rule]` 是同一个段。
@@ -165,7 +167,7 @@ enum ConfCodec {
         case "USER-AGENT": return .userAgent
         case "GEOIP": return .geoIP
         case "MATCH", "FINAL": return .final
-        default: return nil
+        default: return .domain
         }
     }
 
@@ -184,7 +186,7 @@ enum ConfCodec {
         let parts = fields(String(line[line.index(after: split)...]))
         guard !name.isEmpty, parts.count >= 2, let groupKind = kind(of: parts[0]) else { return nil }
         // url=/interval=/timeout= 这类是探测参数，不是成员；本轮还不做探测，直接不收进成员表。
-        let members = parts.dropFirst()
+        let members = parts.dropFirst().filter { !$0.contains("=") }
         guard !members.isEmpty else { return nil }
         return PolicyGroup(name: name, kind: groupKind, members: Array(members))
     }

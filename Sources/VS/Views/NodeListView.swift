@@ -3,8 +3,7 @@ import UIKit
 
 struct NodeListView: View {
     @Environment(ConfigStore.self) private var store
-    @State private var latencies: [String: ProbeOutcome] = [:]
-    @State private var isProbing = false
+    @State private var probe = ProbeCoordinator()
     @State private var showImport = false
     @State private var editingNode: Node?
     @State private var storeError: String?
@@ -23,10 +22,10 @@ struct NodeListView: View {
                         }
                     }
                     ToolbarItem(placement: .topBarLeading) {
-                        Button(isProbing ? "测速中" : "测速") {
-                            Task { await probeAll() }
+                        Button(probe.isRunning ? "测速中" : "测速") {
+                            Task { await probe.run(nodes: store.nodes) }
                         }
-                        .disabled(store.nodes.isEmpty || isProbing)
+                        .disabled(store.nodes.isEmpty || probe.isRunning)
                     }
                 }
                 .sheet(isPresented: $showImport) {
@@ -59,7 +58,7 @@ struct NodeListView: View {
         } else {
             List {
                 ForEach(store.nodes) { node in
-                    NodeRow(node: node, outcome: latencies[node.id])
+                    NodeRow(node: node, outcome: probe.outcomes[node.id])
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions {
@@ -68,7 +67,7 @@ struct NodeListView: View {
                             Button("删除", role: .destructive) {
                                 do {
                                     try store.removeNode(node)
-                                    latencies.removeValue(forKey: node.id)
+                                    probe.forgetOutcome(for: node.id)
                                 } catch {
                                     storeError = "删除未生效：本地文件写入失败，节点仍然保留"
                                 }
@@ -78,22 +77,13 @@ struct NodeListView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .refreshable { await probeAll() }
+            .refreshable { await probe.run(nodes: store.nodes) }
             .sheet(item: $editingNode) { node in
                 NodeEditorView(node: node) { oldID in
-                    latencies.removeValue(forKey: oldID)
+                    probe.forgetOutcome(for: oldID)
                 }
             }
         }
-    }
-
-    private func probeAll() async {
-        let prober = NodeProber()
-        isProbing = true
-        for node in store.nodes {
-            latencies[node.id] = await prober.probe(node)
-        }
-        isProbing = false
     }
 }
 

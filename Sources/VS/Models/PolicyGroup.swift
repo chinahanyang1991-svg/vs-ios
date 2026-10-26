@@ -46,7 +46,7 @@ struct PolicyResolver {
         switch group.kind {
         case .select: return selectedMember(in: group, latencies: latencies)
         case .urlTest: return fastestMember(in: group, latencies: latencies)
-        case .fallback: return fastestMember(in: group, latencies: latencies)
+        case .fallback: return firstAvailableMember(in: group, latencies: latencies)
         }
     }
 

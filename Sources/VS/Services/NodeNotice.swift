@@ -7,7 +7,7 @@ final class NodeNotice {
     private(set) var message: String?
 
     func raise(_ text: String) {
-        if message == nil { message = text }
+        message = text
     }
 
     func clear() {

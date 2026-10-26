@@ -203,14 +203,15 @@ enum ConfCodec {
     // MARK: - 单行导出
 
     private static func renderRule(_ rule: TrafficRule) -> String {
-        var parts: [String] = []
-        if rule.matchType != .final { parts.append(rule.matchType.confToken) }
-        parts.append(rule.matchType == .final ? "" : rule.pattern)
+        // 类型字面量一行都不能省：`MATCH`/`FINAL` 省下来，剩下第一个字段就成了动作，
+        // 再读回来会被当成"没有类型的行"退到未吃透那堆里——兜底规则就这么蒸发掉。
+        var parts: [String] = [rule.matchType.confToken]
+        if rule.matchType != .final { parts.append(rule.pattern) }
         parts.append(rule.action.confToken)
         if let policy = rule.policy { parts.append(policy) }
         if rule.noResolve { parts.append("no-resolve") }
         if rule.forceRemoteDNS { parts.append("force-remote-dns") }
-        return parts.filter { !$0.isEmpty }.joined(separator: ",")
+        return parts.joined(separator: ",")
     }
 }
 

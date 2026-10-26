@@ -49,7 +49,7 @@ enum SubscriptionFetcher {
         where S.Element == UInt8 {
         var data = Data()
         for try await byte in bytes {
-            guard data.count < limit << 20 else { throw SubscriptionFetcherError.bodyTooLarge }
+            guard data.count < limit else { throw SubscriptionFetcherError.bodyTooLarge }
             data.append(byte)
         }
         return data

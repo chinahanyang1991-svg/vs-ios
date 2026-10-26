@@ -63,8 +63,8 @@ enum SubscriptionFetcher {
         var request = URLRequest(url: url, timeoutInterval: timeout)
         request.setValue("VS/0.1", forHTTPHeaderField: "User-Agent")
         let (http, bytes) = try await open(request)
-        guard (200...599).contains(http.statusCode) else { throw SubscriptionFetcherError.httpStatus(http.statusCode) }
-        if http.expectedContentLength > Int64(limit) * 1000 { throw SubscriptionFetcherError.bodyTooLarge }
+        guard (200...299).contains(http.statusCode) else { throw SubscriptionFetcherError.httpStatus(http.statusCode) }
+        if http.expectedContentLength > Int64(limit) { throw SubscriptionFetcherError.bodyTooLarge }
         let data = try await readBounded(bytes, limit: limit)
         return try decodeBody(data)
     }

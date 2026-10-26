@@ -178,7 +178,8 @@ struct RuleEngine {
     }
 
     /// `::` 两侧各自是若干组；组内为空（如 "1::2:" 这类畸形）判不可解析。
-    private func groups(_ slice: Substring) -> [Substring]? {
+    /// 参数写 StringProtocol：调用处一半传 String、一半传 String 的切片，钉成 Substring 会把 String 那侧卡住。
+    private func groups(_ slice: some StringProtocol) -> [Substring]? {
         if slice.isEmpty { return [] }
         let parts = slice.split(separator: ":", omittingEmptySubsequences: false)
         for part in parts where part.isEmpty { return nil }

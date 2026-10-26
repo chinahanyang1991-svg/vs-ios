@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 节点页失败横幅的归属。R18 红轮：这份占位就是**现状的形状**——只会挂上去，谁都撤不下来。
+/// 节点页失败横幅的归属：一次只挂一条，且新一轮操作开始时旧的一条必须撤下。
 @Observable
 final class NodeNotice {
     private(set) var message: String?
@@ -10,7 +10,11 @@ final class NodeNotice {
         message = text
     }
 
-    func clear() {}
+    func clear() {
+        message = nil
+    }
 
-    func beginOperation() {}
+    func beginOperation() {
+        clear()
+    }
 }

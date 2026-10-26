@@ -1,7 +1,7 @@
 import XCTest
 @testable import VS
 
-/// R18：节点页的失败横幅必须**可复位**。现状是 `NodeListView` 里一个 `@State storeError`，
+/// R18：节点页的失败横幅必须**可复位**。R18 立判据时的现状是 `NodeListView` 里一个 `@State storeError`，
 /// 只在删除失败那一次赋值（`NodeListView.swift:72`），全文没有任何一处把它清回 nil——
 /// 于是"删除未生效"会一直挂在页面底部，后续成功的导入/编辑/删除都盖不掉它。
 /// 红轮写死预期：用例级 2 红（第 2、3 条各 1 条断言读被占位改坏的值），断言级 2；

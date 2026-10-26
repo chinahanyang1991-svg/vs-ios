@@ -6,7 +6,7 @@ struct NodeListView: View {
     @State private var probe = ProbeCoordinator()
     @State private var showImport = false
     @State private var editingNode: Node?
-    @State private var storeError: String?
+    @State private var notice = NodeNotice()
 
     var body: some View {
         NavigationStack {
@@ -16,6 +16,7 @@ struct NodeListView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
+                            notice.beginOperation()
                             showImport = true
                         } label: {
                             Image(systemName: "plus")
@@ -23,6 +24,7 @@ struct NodeListView: View {
                     }
                     ToolbarItem(placement: .topBarLeading) {
                         Button(probe.isRunning ? "测速中" : "测速") {
+                            notice.beginOperation()
                             Task { await probe.run(nodes: store.nodes) }
                         }
                         .disabled(store.nodes.isEmpty || probe.isRunning)
@@ -32,8 +34,8 @@ struct NodeListView: View {
                     ImportView()
                 }
                 .safeAreaInset(edge: .bottom) {
-                    if let storeError {
-                        Text(storeError)
+                    if let noticeText = notice.message {
+                        Text(noticeText)
                             .font(.caption)
                             .foregroundStyle(.orange)
                             .padding(10)
@@ -65,11 +67,12 @@ struct NodeListView: View {
                             Button("编辑") { editingNode = node }
                                 .tint(.blue)
                             Button("删除", role: .destructive) {
+                                notice.beginOperation()
                                 do {
                                     try store.removeNode(node)
                                     probe.forgetOutcome(for: node.id)
                                 } catch {
-                                    storeError = "删除未生效：本地文件写入失败，节点仍然保留"
+                                    notice.raise("删除未生效：本地文件写入失败，节点仍然保留")
                                 }
                             }
                         }
@@ -77,7 +80,10 @@ struct NodeListView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .refreshable { await probe.run(nodes: store.nodes) }
+            .refreshable {
+                notice.beginOperation()
+                await probe.run(nodes: store.nodes)
+            }
             .sheet(item: $editingNode) { node in
                 NodeEditorView(node: node) { oldID in
                     probe.forgetOutcome(for: oldID)

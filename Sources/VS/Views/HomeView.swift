@@ -40,6 +40,13 @@ struct HomeView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if let saveError = store.vpnSettingsSaveError {
+                    Section("上次没存成功") {
+                        Text(saveError)
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
             .navigationTitle("概览")
             .onAppear { profileCount = try? store.exportedProfiles().count }

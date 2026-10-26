@@ -307,8 +307,14 @@ final class ConfigStore {
     }
 
     func updateVPNSettings(_ settings: IKEv2TunnelSettings) throws {
-        try write(nodes: nodes, subscriptions: subscriptions, vpn: settings)
-        vpnSettings = settings
+        do {
+            try write(nodes: nodes, subscriptions: subscriptions, vpn: settings)
+            vpnSettings = settings
+        } catch {
+            // 失败信息要活得比这次调用久：页面正在退出，视图局部变量跟着一起消失。
+            vpnSettingsSaveError = Self.vpnPersistenceHint(savedOnDisk: vpnSettingsSavedOnDisk)
+            throw error
+        }
     }
 
     /// 生成 .mobileconfig 落到 App Group 目录，供系统分享面板交给“设置”安装。
@@ -326,6 +332,7 @@ final class ConfigStore {
             lastStatus = "已生成描述文件 \(url.lastPathComponent)"
         } catch {
             vpnSettingsSavedOnDisk = false
+            vpnSettingsSaveError = Self.vpnPersistenceHint(savedOnDisk: vpnSettingsSavedOnDisk)
             lastStatus = "已生成描述文件 \(url.lastPathComponent)，但表单未能保存到本机文件：\(Self.describe(error))"
         }
         return url
@@ -387,5 +394,7 @@ final class ConfigStore {
         // 快照里的 vpn 段取的就是当前内存值（或被调用方原样递回来的那份），
         // 所以只要字节真落到盘上，两边就重新对齐了——失败路径在上面已 throw，走不到这里。
         vpnSettingsSavedOnDisk = true
+        // 真落盘 ⇒ 之前那句「没能保存」不再成立，界面不许继续挂着它。
+        vpnSettingsSaveError = nil
     }
 }

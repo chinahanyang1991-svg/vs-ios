@@ -69,6 +69,12 @@ struct VPNProfileView: View {
                             .font(.callout)
                             .foregroundStyle(.orange)
                     }
+                    // 上一次保存没落盘的事：页面退出时发生的失败，进来后仍要看得见。
+                    if let saveError = store.vpnSettingsSaveError {
+                        Text(saveError)
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                    }
                     // 「生成成了」和「没能存到本机」是两件事，一屏里都要说，不能只说其中一半。
                     if let statusNote {
                         Text(statusNote)
@@ -128,8 +134,9 @@ struct VPNProfileView: View {
                 reloadProfiles()
             }
             .onDisappear {
-                do { try store.updateVPNSettings(settings) }
-                catch { errorMessage = ConfigStore.vpnPersistenceHint(savedOnDisk: store.vpnSettingsSavedOnDisk) }
+                // 失败由 store 记着（vpnSettingsSaveError）：页面一退出，视图局部变量就没了，
+                // 提示必须活到下次进页面或回到概览页为止。
+                try? store.updateVPNSettings(settings)
             }
             .onChange(of: settings) { _, _ in
                 exportedURL = nil

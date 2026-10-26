@@ -120,6 +120,10 @@ final class ConfigStore {
     /// 那一刻用户看到的新值只活在本机内存里——界面必须问得出这一态。
     private(set) var vpnSettingsSavedOnDisk = true
 
+    /// 保存 VPN 表单失败后留下的那句话，供界面在页面退出之后仍能问到。
+    /// 占位：恒为 nil——退出时写盘失败的错误目前只进了视图局部变量，跟着页面一起消失。
+    private(set) var vpnSettingsSaveError: String?
+
     /// 两种失败的后果不同，不许共用一句：没落盘 ⇒ 新值只撑到本次会话；
     /// 落盘失败且内存未更新 ⇒ 下次进页面就是旧值。
     static func vpnPersistenceHint(savedOnDisk: Bool) -> String {

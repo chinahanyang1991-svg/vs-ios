@@ -152,4 +152,48 @@ final class StorageHonestyTests: XCTestCase {
         XCTAssertTrue(sessionOnly.contains("退出 App"),
                       "…并点明这只撑到本次会话：\(sessionOnly)")
     }
+
+    // MARK: - R19：VPN 页退出时的保存失败，要留下一个页面关掉之后还能问到的状态
+
+    /// 页面 onDisappear 里写盘失败，错误被塞进视图局部变量，页面一退就没人看得到。
+    /// 这句提示必须挂在 store 上，下次进页面（或概览页）才问得到。
+    func testFailedVPNSettingsSaveLeavesAQueryableError() throws {
+        let store = ConfigStore(storeURL: try blockedStoreURL(), cipher: try cipher(11))
+        XCTAssertThrowsError(try store.updateVPNSettings(makeSettings()),
+                             "前提：这条 store 确实写不下去")
+        XCTAssertEqual(store.vpnSettingsSaveError, "表单未能保存到本地文件，下次进入会回到旧值",
+                       "写盘失败的话必须留在 store 上；只进视图局部变量，页面一退就等于没说")
+    }
+
+    /// 导出成功但没落盘是同一类失败，后果不同（内存里是新值、盘上是旧值），
+    /// 所以它要留的是另一句——不能跟「内存没更新」共用同一句话。
+    func testExportThatCannotPersistAlsoLeavesTheQueryableError() throws {
+        let store = ConfigStore(storeURL: try blockedStoreURL(), cipher: try cipher(11))
+        do {
+            _ = try store.exportProfile(makeSettings())
+        } catch {
+            XCTFail("前提：导出这条路不该被保存失败挡死：\(error)")
+        }
+        XCTAssertEqual(store.vpnSettingsSaveError,
+                       "表单未能保存到本机文件里——本机文件里还是旧值，这次填的只在这次运行里有效，退出 App 后同样回到旧值",
+                       "导出没落盘也得留下状态，且用的是「本机文件里还是旧值」那一句")
+    }
+
+    func testLaterSuccessfulSaveClearsTheVNPSaveError() throws {
+        let blocked = try blockedStoreURL()
+        let store = ConfigStore(storeURL: blocked, cipher: try cipher(11))
+        _ = try store.exportProfile(makeSettings())
+        try FileManager.default.removeItem(at: blocked)
+        try store.updateVPNSettings(makeSettings())
+        XCTAssertNil(store.vpnSettingsSaveError,
+                     "一次真正落盘的保存要把旧提示收回来，界面不许一直挂着")
+    }
+
+    func testHealthyStoreHasNoVNPSaveError() throws {
+        let store = ConfigStore(storeURL: directory.appendingPathComponent("vs-config.json"),
+                                cipher: try cipher(33))
+        XCTAssertNil(store.vpnSettingsSaveError, "从没失败过的存储不该报错——反向守卫")
+        try store.updateVPNSettings(makeSettings())
+        XCTAssertNil(store.vpnSettingsSaveError, "成功保存之后同样不该报错")
+    }
 }

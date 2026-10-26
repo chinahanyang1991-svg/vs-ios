@@ -44,7 +44,7 @@ struct PolicyGroup: Codable, Hashable, Identifiable {
 struct PolicyResolver {
     static func resolve(_ group: PolicyGroup, latencies: [String: Int]) -> String? {
         switch group.kind {
-        case .select: return selectedMember(in: group, latencies: latencies)
+        case .select: return fastestMember(in: group, latencies: latencies)
         case .urlTest: return fastestMember(in: group, latencies: latencies)
         case .fallback: return firstAvailableMember(in: group, latencies: latencies)
         }
@@ -73,7 +73,7 @@ struct PolicyResolver {
         }
         guard let best = fastest else { return nil }
         if let chosen = group.chosen, group.members.contains(chosen), let chosenMS = latencies[chosen] {
-            return best.ms < chosenMS - group.toleranceMS ? best.name : chosen
+            return best.ms < chosenMS ? best.name : chosen
         }
         return best.name
     }

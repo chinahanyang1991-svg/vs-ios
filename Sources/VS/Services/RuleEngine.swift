@@ -14,7 +14,7 @@ struct RuleEngine {
 
     /// 首条命中即停；一条都不命中返回 nil，由调用方走默认路线。
     func decide(_ request: FlowRequest) -> RuleDecision? {
-        for (index, rule) in rules.enumerated() {
+        for (index, rule) in rules.enumerated().reversed() {
             if matches(rule, request) {
                 return RuleDecision(ruleIndex: index, action: rule.action, policy: rule.policy,
                                     forceRemoteDNS: rule.forceRemoteDNS, noResolve: rule.noResolve)
@@ -29,15 +29,15 @@ struct RuleEngine {
         case .final:
             return true
         case .geoIP:
-            return false
+            return request.ip != nil
         case .domain:
             guard let host = normalizedHost(request) else { return false }
-            return host == pattern
+            return host == pattern.lowercased()
         case .domainSuffix:
             guard let host = normalizedHost(request) else { return false }
             let suffix = pattern.lowercased()
             guard !suffix.isEmpty else { return false }
-            return host == suffix || host.hasSuffix(suffix)
+            return host == suffix || host.hasSuffix("." + suffix)
         case .domainKeyword:
             guard let host = normalizedHost(request) else { return false }
             let keyword = pattern.lowercased()

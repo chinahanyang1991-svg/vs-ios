@@ -32,12 +32,12 @@ struct RuleEngine {
             return false
         case .domain:
             guard let host = normalizedHost(request) else { return false }
-            return host == pattern.lowercased()
+            return host == pattern
         case .domainSuffix:
             guard let host = normalizedHost(request) else { return false }
             let suffix = pattern.lowercased()
             guard !suffix.isEmpty else { return false }
-            return host == suffix || host.hasSuffix("." + suffix)
+            return host == suffix || host.hasSuffix(suffix)
         case .domainKeyword:
             guard let host = normalizedHost(request) else { return false }
             let keyword = pattern.lowercased()

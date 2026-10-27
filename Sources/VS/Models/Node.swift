@@ -16,11 +16,12 @@ enum NodeKind: String, Codable, CaseIterable {
     }
 
     /// 当前内核（原生路线只生成 IKEv2 描述文件）能不能承载这一类节点。
-    /// R23 占位＝复刻现状：这张表态表原本不存在，任何协议进来都当能用，所以恒真。
+    /// 穷举 switch 就是闸门本体：新增协议不在这里表态就编译不过；
+    /// 想改判 true，前提是该类节点有过真机承载实测，否则每枚协议都得先红一条判据。
     var isCarriableByCurrentEngine: Bool {
         switch self {
         case .vless, .vmess, .trojan, .shadowsocks:
-            return true
+            return false
         }
     }
 }

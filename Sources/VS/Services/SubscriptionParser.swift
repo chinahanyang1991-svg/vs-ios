@@ -44,7 +44,22 @@ enum SubscriptionParser {
         if truncated {
             report.notices.append("节点数已达上限 \(maxNodeCount)，后面的条目没有解析")
         }
+        appendCarriageNotices(to: &report)
         return report
+    }
+
+    /// 承载不了的协议在入库那一刻就要各自点名说明。
+    /// 沉默是这里最坏的失败方式：节点进了列表、用户选了它，还以为自己在走代理。
+    /// 说明只点名协议，不带地址与凭据。
+    private static func appendCarriageNotices(to report: inout ParseReport) {
+        var announced: [NodeKind] = []
+        for node in report.nodes where !node.kind.isCarriableByCurrentEngine {
+            guard !announced.contains(node.kind) else { continue }
+            announced.append(node.kind)
+        }
+        for kind in announced {
+            report.notices.append("\(kind.displayName)：当前原生路线只生成 IKEv2 描述文件，这类节点承载不了，别当成已经在走代理。")
+        }
     }
 
     // MARK: - 单条链接

@@ -124,7 +124,9 @@ struct SubscriptionListView: View {
         defer { busy = false }
         do {
             let report = try await store.fetchSubscription(url: url, title: title)
-            message = report.notices.first ?? "解析 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
+            // 承载说明会进 notices，但它不能顶掉"解析了几个"这句——两件都要说
+            let summary = "解析 \(report.nodes.count) 个，拒绝 \(report.rejected.count) 条"
+            message = report.notices.isEmpty ? summary : summary + "；" + report.notices.joined(separator: "；")
         } catch is CancellationError {
             message = "此次订阅导入已取消，未写入返回的数据"
         } catch {

@@ -48,7 +48,7 @@ enum ConfCodec {
             case "general":
                 if let (key, value) = keyValue(line) { general[key] = value } else { unparsed.append(line) }
             case "host":
-                if let (key, value) = keyValue(line) { general[key] = value } else { unparsed.append(line) }
+                if let (key, value) = keyValue(line) { hosts[key] = value } else { unparsed.append(line) }
             case "proxy group":
                 if let group = policyGroup(from: line) { groups.append(group) } else { unparsed.append(line) }
             case "rule":
@@ -87,7 +87,11 @@ enum ConfCodec {
                 if let address = document.hosts[host] { lines.append("\(host) = \(address)") }
             }
         }
-        _ = unparsedSection
+        if !document.unparsedLines.isEmpty {
+            if !lines.isEmpty { lines.append("") }
+            lines.append("[\(unparsedSection)]")
+            lines.append(contentsOf: document.unparsedLines)
+        }
         return lines.joined(separator: "\n")
     }
 

@@ -14,6 +14,15 @@ enum NodeKind: String, Codable, CaseIterable {
         case .shadowsocks: return "Shadowsocks"
         }
     }
+
+    /// 当前内核（原生路线只生成 IKEv2 描述文件）能不能承载这一类节点。
+    /// R23 占位＝复刻现状：这张表态表原本不存在，任何协议进来都当能用，所以恒真。
+    var isCarriableByCurrentEngine: Bool {
+        switch self {
+        case .vless, .vmess, .trojan, .shadowsocks:
+            return true
+        }
+    }
 }
 
 struct Node: Identifiable, Codable, Hashable {
